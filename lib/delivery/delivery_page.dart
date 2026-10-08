@@ -40,7 +40,7 @@ class DeliveryPage extends StatelessWidget {
           const _StopCard(
             step: '1',
             title: 'Pickup from store',
-            place: 'Fresh Basket Supermarket',
+            place: 'Fresh Basket',
             address: '12 Market Road, Mandapeta',
           ),
           const SizedBox(height: 12),
@@ -48,7 +48,7 @@ class DeliveryPage extends StatelessWidget {
             step: '2',
             title: 'Deliver to customer',
             place: 'Ananya Reddy',
-            address: '8 Lake View Colony, Mandapeta',
+            address: 'Lakshmi Nagar, Mandapeta',
           ),
           const SizedBox(height: 18),
           const Card(

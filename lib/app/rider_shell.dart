@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/availability_store.dart';
 import '../earnings/earnings_page.dart';
 import '../home/home_page.dart';
 import '../orders/orders_page.dart';
@@ -15,12 +16,19 @@ class RiderShell extends StatefulWidget {
 class _RiderShellState extends State<RiderShell> {
   int _selectedIndex = 0;
 
-  static const _pages = [
-    HomePage(),
-    OrdersPage(),
-    EarningsPage(),
-    ProfilePage(),
+  late final _availabilityStore = AvailabilityStore();
+  late final _pages = [
+    HomePage(availabilityStore: _availabilityStore),
+    OrdersPage(availabilityStore: _availabilityStore),
+    const EarningsPage(),
+    const ProfilePage(),
   ];
+
+  @override
+  void dispose() {
+    _availabilityStore.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

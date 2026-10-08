@@ -1,25 +1,31 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/availability_store.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/section_title.dart';
 import '../core/widgets/status_badge.dart';
 import '../delivery/delivery_page.dart';
 import '../earnings/earnings_page.dart';
-import '../history/history_page.dart';
 import '../help_support/help_support_page.dart';
+import '../history/history_page.dart';
 import '../orders/orders_page.dart';
-import '../settings/settings_page.dart';
+import 'home_demo_data.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    required this.availabilityStore,
+    this.demoData = const HomeDemoData(),
+    super.key,
+  });
+
+  final AvailabilityStore availabilityStore;
+  final HomeDemoData demoData;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isOnline = true;
-
   Future<void> _openPage(Widget page) async {
     await Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (_) => page));
@@ -27,6 +33,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final delivery = widget.demoData.activeDelivery;
+
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -35,28 +43,35 @@ class _HomePageState extends State<HomePage> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _buildHeader(),
-                const SizedBox(height: 22),
-                _buildOnlineCard(),
                 const SizedBox(height: 20),
-                _buildEarningsCard(),
-                const SizedBox(height: 24),
+                _buildAvailabilityCard(),
+                const SizedBox(height: 22),
                 SectionTitle(
-                  title: "Today's overview",
+                  title: "Today's summary",
+                  action: 'Earnings',
+                  onAction: () => _openPage(const EarningsPage()),
+                ),
+                const SizedBox(height: 10),
+                _buildDailySummary(),
+                const SizedBox(height: 22),
+                if (delivery case final activeDelivery?) ...[
+                  SectionTitle(title: 'Active Delivery'),
+                  const SizedBox(height: 10),
+                  _buildActiveDelivery(activeDelivery),
+                ] else
+                  _buildNoActiveDelivery(),
+                const SizedBox(height: 22),
+                SectionTitle(
+                  title: 'Recent Delivery',
                   action: 'History',
                   onAction: () => _openPage(const HistoryPage()),
                 ),
                 const SizedBox(height: 10),
-                _buildOverview(),
-                const SizedBox(height: 24),
-                SectionTitle(
-                  title: 'New delivery',
-                  action: 'All orders',
-                  onAction: () => _openPage(const OrdersPage()),
-                ),
-                const SizedBox(height: 10),
-                _buildDeliveryCard(),
+                _buildRecentDelivery(),
                 const SizedBox(height: 22),
-                _buildQuickLinks(),
+                const SectionTitle(title: 'Quick actions'),
+                const SizedBox(height: 10),
+                _buildQuickActions(),
               ]),
             ),
           ),
@@ -82,16 +97,25 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Good morning,', style: AppTheme.secondaryTextStyle),
-              SizedBox(height: 2),
-              Text('Ravi Kumar 👋', style: AppTheme.greetingTitle),
+              Text(
+                widget.demoData.greeting,
+                style: AppTheme.secondaryTextStyle,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                widget.demoData.riderName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.greetingTitle,
+              ),
             ],
           ),
         ),
+        const SizedBox(width: 8),
         IconButton.filledTonal(
           onPressed: () => _openPage(const HelpSupportPage()),
           tooltip: 'Help and support',
@@ -101,236 +125,264 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildOnlineCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: (_isOnline ? AppTheme.success : AppTheme.error)
-                    .withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _isOnline ? Icons.wifi : Icons.wifi_off,
-                color: _isOnline ? AppTheme.success : AppTheme.error,
-              ),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isOnline ? 'You are online' : 'You are offline',
-                    style: AppTheme.cardTitle,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _isOnline
-                        ? 'Ready to receive deliveries'
-                        : 'Go online to receive orders',
-                    style: AppTheme.secondaryTextStyle,
-                  ),
-                ],
-              ),
-            ),
-            Switch.adaptive(
-              value: _isOnline,
-              activeTrackColor: AppTheme.success,
-              onChanged: (value) => setState(() => _isOnline = value),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildAvailabilityCard() {
+    return ValueListenableBuilder<AvailabilityStatus>(
+      valueListenable: widget.availabilityStore,
+      builder: (context, availability, child) {
+        final isAvailable = availability == AvailabilityStatus.available;
+        final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
 
-  Widget _buildEarningsCard() {
-    return InkWell(
-      onTap: () => _openPage(const EarningsPage()),
-      borderRadius: BorderRadius.circular(22),
-      child: Ink(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.primaryText,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
               children: [
                 Icon(
-                  Icons.account_balance_wallet_outlined,
-                  color: AppTheme.onDarkSurface,
-                  size: 20,
+                  isAvailable ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                  color: statusColor,
+                  size: 24,
                 ),
-                SizedBox(width: 8),
-                Text(
-                  "Today's earnings",
-                  style: TextStyle(color: AppTheme.onDarkSurface),
-                ),
-                Spacer(),
-                Icon(
-                  Icons.arrow_outward_rounded,
-                  color: AppTheme.onDarkSurface,
-                  size: 18,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '₹ 1,250.00',
-              style: TextStyle(
-                color: AppTheme.surface,
-                fontSize: 32,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 15),
-            Container(height: 1, color: AppTheme.darkDivider),
-            const SizedBox(height: 13),
-            const Row(
-              children: [
-                Icon(
-                  Icons.local_shipping_outlined,
-                  color: AppTheme.onDarkSurface,
-                  size: 17,
-                ),
-                SizedBox(width: 7),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    '5 deliveries completed',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppTheme.onDarkSurface),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isAvailable ? "You're online" : "You're offline",
+                        style: AppTheme.cardTitle.copyWith(color: statusColor),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        isAvailable
+                            ? "You're ready to receive delivery offers."
+                            : "You're not available for new delivery offers.",
+                        style: AppTheme.secondaryTextStyle,
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 8),
-                Text(
-                  '+ ₹ 150 bonus',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: AppTheme.bonus),
+                Switch.adaptive(
+                  value: isAvailable,
+                  activeTrackColor: AppTheme.success,
+                  onChanged: widget.availabilityStore.setAvailable,
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildOverview() {
-    return Row(
-      children: const [
-        Expanded(
-          child: _OverviewTile(
-            icon: Icons.check_circle_outline,
-            value: '5',
-            label: 'Completed',
-          ),
+  Widget _buildDailySummary() {
+    final data = widget.demoData;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.check_circle_outline_rounded,
+                label: 'Deliveries',
+                value: '${data.deliveriesCompleted}',
+                detail: 'completed',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.payments_outlined,
+                label: "Today's earnings",
+                value: '₹${data.todayEarnings}',
+              ),
+            ),
+          ],
         ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _OverviewTile(
-            icon: Icons.timer_outlined,
-            value: '3h 40m',
-            label: 'Active time',
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _OverviewTile(
-            icon: Icons.star_outline_rounded,
-            value: '4.9',
-            label: 'Rating',
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.route_outlined,
+                label: 'Distance',
+                value: '${data.distanceKm.toStringAsFixed(1)} km',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.schedule_outlined,
+                label: 'Online time',
+                value: data.onlineTime,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildDeliveryCard() {
+  Widget _buildActiveDelivery(DemoDelivery delivery) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    delivery.orderId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.cardTitle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusBadge(
+                  label: delivery.status,
+                  color: AppTheme.success,
+                  backgroundColor: AppTheme.successSoft,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DeliveryDetailRow(
+              icon: Icons.storefront_outlined,
+              label: 'Store',
+              value: delivery.store,
+            ),
+            const SizedBox(height: 10),
+            _DeliveryDetailRow(
+              icon: Icons.person_outline_rounded,
+              label: 'Customer',
+              value: delivery.customer,
+            ),
+            const SizedBox(height: 10),
+            _DeliveryDetailRow(
+              icon: Icons.store_mall_directory_outlined,
+              label: 'Pickup',
+              value: delivery.pickup,
+            ),
+            const SizedBox(height: 10),
+            _DeliveryDetailRow(
+              icon: Icons.location_on_outlined,
+              label: 'Drop',
+              value: delivery.drop,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _InlineMetric(
+                  icon: Icons.route_outlined,
+                  text: '${delivery.distanceKm.toStringAsFixed(1)} km',
+                ),
+                _InlineMetric(
+                  icon: Icons.payments_outlined,
+                  text: '₹${delivery.payout}',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _openPage(const DeliveryPage()),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('View Delivery'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoActiveDelivery() {
+    return ValueListenableBuilder<AvailabilityStatus>(
+      valueListenable: widget.availabilityStore,
+      builder: (context, availability, child) {
+        final isAvailable = availability == AvailabilityStatus.available;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.inbox_outlined,
+                  color: AppTheme.secondaryText,
+                  size: 28,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('No active delivery', style: AppTheme.cardTitle),
+                      const SizedBox(height: 4),
+                      Text(
+                        isAvailable
+                            ? 'Stay online to receive nearby delivery offers.'
+                            : 'Go online when you are ready to receive delivery offers.',
+                        style: AppTheme.secondaryTextStyle,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecentDelivery() {
+    final delivery = widget.demoData.recentDelivery;
     return Card(
       child: InkWell(
         onTap: () => _openPage(const DeliveryPage()),
         borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: const EdgeInsets.all(14),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const StatusBadge(label: 'NEW ORDER'),
-                  const Spacer(),
-                  const Text('2.4 km away', style: AppTheme.secondaryTextStyle),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppTheme.secondaryText,
-                  ),
-                ],
+              const CircleAvatar(
+                backgroundColor: AppTheme.successSoft,
+                child: Icon(Icons.check_rounded, color: AppTheme.success),
               ),
-              const SizedBox(height: 16),
-              const _PlaceRow(
-                icon: Icons.storefront_outlined,
-                color: AppTheme.brand,
-                title: 'Fresh Basket Supermarket',
-                subtitle: 'Pickup · 12 Market Road',
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 11),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    width: 1,
-                    height: 17,
-                    color: AppTheme.divider,
-                  ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      delivery.store,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.bodyText.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${delivery.distanceKm.toStringAsFixed(1)} km · Delivered',
+                      style: AppTheme.smallStatus,
+                    ),
+                  ],
                 ),
               ),
-              const _PlaceRow(
-                icon: Icons.location_on_outlined,
-                color: AppTheme.success,
-                title: 'Ananya Reddy',
-                subtitle: 'Drop-off · 8 Lake View Colony',
+              const SizedBox(width: 8),
+              Text(
+                '₹${delivery.payout}',
+                style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Est. payout', style: AppTheme.secondaryTextStyle),
-                      SizedBox(width: 7),
-                      Text(
-                        '₹ 85',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                  FilledButton(
-                    onPressed: () => _openPage(const DeliveryPage()),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                    ),
-                    child: const Text('View order'),
-                  ),
-                ],
-              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, color: AppTheme.secondaryText),
             ],
           ),
         ),
@@ -338,52 +390,104 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildQuickLinks() {
-    return Row(
+  Widget _buildQuickActions() {
+    return Column(
       children: [
-        Expanded(
-          child: _QuickLink(
-            icon: Icons.tune_rounded,
-            label: 'Preferences',
-            onTap: () => _openPage(const SettingsPage()),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.receipt_long_outlined,
+                label: 'Orders',
+                onTap: () => _openPage(
+                  OrdersPage(availabilityStore: widget.availabilityStore),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.history_rounded,
+                label: 'History',
+                onTap: () => _openPage(const HistoryPage()),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _QuickLink(
-            icon: Icons.help_outline_rounded,
-            label: 'Get help',
-            onTap: () => _openPage(const HelpSupportPage()),
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Earnings',
+                onTap: () => _openPage(const EarningsPage()),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.help_outline_rounded,
+                label: 'Help & Support',
+                onTap: () => _openPage(const HelpSupportPage()),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _OverviewTile extends StatelessWidget {
-  const _OverviewTile({
+class _StatCard extends StatelessWidget {
+  const _StatCard({
     required this.icon,
-    required this.value,
     required this.label,
+    required this.value,
+    this.detail,
   });
 
   final IconData icon;
-  final String value;
   final String label;
+  final String value;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+        padding: const EdgeInsets.all(14),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: AppTheme.brand, size: 19),
-            const SizedBox(height: 8),
-            Text(value, style: AppTheme.cardTitle.copyWith(fontSize: 15)),
-            const SizedBox(height: 3),
-            Text(label, style: AppTheme.smallStatus),
+            Row(
+              children: [
+                Icon(icon, color: AppTheme.brand, size: 18),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.smallStatus,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 5,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.cardTitle,
+                ),
+                if (detail != null) Text(detail!, style: AppTheme.smallStatus),
+              ],
+            ),
           ],
         ),
       ),
@@ -391,36 +495,31 @@ class _OverviewTile extends StatelessWidget {
   }
 }
 
-class _PlaceRow extends StatelessWidget {
-  const _PlaceRow({
+class _DeliveryDetailRow extends StatelessWidget {
+  const _DeliveryDetailRow({
     required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
+    required this.label,
+    required this.value,
   });
 
   final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(width: 10),
+        Icon(icon, color: AppTheme.secondaryText, size: 19),
+        const SizedBox(width: 9),
+        SizedBox(width: 68, child: Text(label, style: AppTheme.smallStatus)),
+        const SizedBox(width: 6),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 3),
-              Text(subtitle, style: AppTheme.smallStatus),
-            ],
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -428,8 +527,30 @@ class _PlaceRow extends StatelessWidget {
   }
 }
 
-class _QuickLink extends StatelessWidget {
-  const _QuickLink({
+class _InlineMetric extends StatelessWidget {
+  const _InlineMetric({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppTheme.secondaryText, size: 17),
+        const SizedBox(width: 5),
+        Text(
+          text,
+          style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -443,22 +564,26 @@ class _QuickLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: InkWell(
+        key: ValueKey('home-action-$label'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           child: Row(
             children: [
               Icon(icon, color: AppTheme.brand, size: 20),
-              const SizedBox(width: 8),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   label,
-                  style: AppTheme.smallStatus.copyWith(
-                    color: AppTheme.primaryText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.bodyText.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+              const SizedBox(width: 4),
               const Icon(
                 Icons.chevron_right,
                 color: AppTheme.secondaryText,
