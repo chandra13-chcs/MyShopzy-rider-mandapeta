@@ -312,7 +312,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(width: 8),
                 StatusBadge(
-                  label: delivery.status,
+                  label: widget.offerStore.activeDeliveryStatus,
                   color: AppTheme.success,
                   backgroundColor: AppTheme.successSoft,
                 ),

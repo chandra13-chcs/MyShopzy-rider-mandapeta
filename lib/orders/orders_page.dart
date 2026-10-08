@@ -76,6 +76,11 @@ class OrdersPage extends StatelessWidget {
               '${delivery.orderId} · ${delivery.store}',
               style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'Status: ${offerStore.activeDeliveryStatus}',
+              style: AppTheme.secondaryTextStyle,
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,

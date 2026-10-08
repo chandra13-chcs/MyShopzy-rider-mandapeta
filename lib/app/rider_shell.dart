@@ -27,7 +27,7 @@ class _RiderShellState extends State<RiderShell> {
     HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     const EarningsPage(),
-    const ProfilePage(),
+    ProfilePage(availabilityStore: _availabilityStore),
   ];
 
   @override
