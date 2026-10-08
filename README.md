@@ -1,17 +1,21 @@
-# myshopzy_rider
+# MyShopzy Rider
 
-A new Flutter project.
+A Flutter demo app for rider workflows. The app opens directly to the Rider
+Home screen with sample delivery, earnings, profile, and settings content.
 
-## Getting Started
+## Included screens
 
-This project is a starting point for a Flutter application.
+- Home dashboard and online availability toggle
+- Delivery details and order list
+- Delivery history and earnings
+- Rider profile, preferences, and help/support
 
-A few resources to get you started if this is your first Flutter project:
+All displayed data and actions are for UI development; no backend services are
+connected.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Run
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+flutter pub get
+flutter run
+```
