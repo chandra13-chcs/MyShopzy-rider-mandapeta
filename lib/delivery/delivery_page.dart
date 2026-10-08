@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/models/demo_delivery.dart';
+import '../core/state/order_offer_store.dart';
 
 class DeliveryPage extends StatelessWidget {
   const DeliveryPage({
     this.delivery = DemoDelivery.batchThreeActive,
+    this.offerStore,
     super.key,
   });
 
   final DemoDelivery delivery;
+  final OrderOfferStore? offerStore;
 
   @override
   Widget build(BuildContext context) {
@@ -77,16 +80,31 @@ class DeliveryPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Demo order accepted')),
+          if (offerStore?.activeDelivery?.orderId == delivery.orderId)
+            FilledButton.icon(
+              onPressed: () {
+                if (offerStore?.completeActiveDelivery(delivery) != true) {
+                  return;
+                }
+                Navigator.of(context).pop(true);
+              },
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Mark Delivery Complete'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            )
+          else
+            FilledButton.icon(
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Demo order accepted')),
+              ),
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Accept delivery'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
             ),
-            icon: const Icon(Icons.check_rounded),
-            label: const Text('Accept delivery'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-            ),
-          ),
         ],
       ),
     );

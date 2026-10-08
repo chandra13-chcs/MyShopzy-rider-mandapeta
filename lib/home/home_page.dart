@@ -36,6 +36,21 @@ class _HomePageState extends State<HomePage> {
         .push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
+  Future<void> _openDeliveryPage(DemoDelivery delivery) async {
+    final completed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) =>
+            DeliveryPage(delivery: delivery, offerStore: widget.offerStore),
+      ),
+    );
+    if (!mounted) return;
+    if (completed == true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Delivery marked complete')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -140,6 +155,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildAvailabilityCard() {
     final isAvailable = widget.availabilityStore.isAvailable;
+    final isBusy = widget.offerStore.isBusy;
     final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
 
     return Card(
@@ -164,7 +180,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 3),
                   Text(
                     isAvailable
-                        ? "You're ready to receive delivery offers."
+                        ? isBusy
+                              ? "You're currently delivering; new offers are paused."
+                              : "You're ready to receive delivery offers."
                         : "You're not available for new delivery offers.",
                     style: AppTheme.secondaryTextStyle,
                   ),
@@ -274,6 +292,14 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              "You're currently delivering",
+              style: AppTheme.secondaryTextStyle.copyWith(
+                color: AppTheme.warning,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -336,7 +362,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () => _openPage(const DeliveryPage()),
+                onPressed: () => _openDeliveryPage(delivery),
                 icon: const Icon(Icons.arrow_forward_rounded),
                 label: const Text('View Delivery'),
               ),

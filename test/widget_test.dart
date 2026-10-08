@@ -5,6 +5,7 @@ import 'package:myshopzy_rider/core/state/availability_store.dart';
 import 'package:myshopzy_rider/core/state/order_offer_store.dart';
 import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
+import 'package:myshopzy_rider/delivery/delivery_page.dart';
 import 'package:myshopzy_rider/home/home_demo_data.dart';
 import 'package:myshopzy_rider/home/home_page.dart';
 import 'package:myshopzy_rider/orders/order_offer_page.dart';
@@ -18,7 +19,7 @@ void main() {
     expect(find.text('Ravi Kumar'), findsOneWidget);
     expect(find.text("You're online"), findsOneWidget);
     expect(
-      find.text("You're ready to receive delivery offers."),
+      find.text("You're currently delivering; new offers are paused."),
       findsOneWidget,
     );
     expect(find.text("Today's summary"), findsOneWidget);
@@ -56,6 +57,8 @@ void main() {
     expect(find.text('On the Way'), findsOneWidget);
     expect(find.text('2.4 km'), findsOneWidget);
     expect(find.text('₹85'), findsNWidgets(2));
+    await _scrollHomeTo(tester, find.text("You're currently delivering"));
+    expect(find.text("You're currently delivering"), findsOneWidget);
     expect(find.text('View Delivery'), findsOneWidget);
   });
 
@@ -318,6 +321,7 @@ void main() {
     );
     expect(find.text('New Delivery Offer'), findsNothing);
     expect(harness.offerStore.canShowOffer, isFalse);
+    expect(harness.offerStore.showAnotherDemoOffer(), isFalse);
     await _disposeOfferHarness(tester, harness);
   });
 
@@ -337,7 +341,154 @@ void main() {
     expect(find.text('No longer available'), findsOneWidget);
     expect(harness.offerStore.acceptOffer(), isFalse);
     expect(harness.offerStore.isBusy, isFalse);
+    expect(harness.availabilityStore.isAvailable, isTrue);
+    expect(harness.offerStore.showAnotherDemoOffer(), isTrue);
+    expect(harness.offerStore.status, OrderOfferStatus.available);
     await _disposeOfferHarness(tester, harness);
+  });
+
+  testWidgets('accepted delivery stays busy across Home and Orders', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+
+    expect(offerStore.acceptOffer(), isTrue);
+    expect(offerStore.status, OrderOfferStatus.accepted);
+    expect(offerStore.activeDelivery?.orderId, '#MS-2051');
+    expect(offerStore.showAnotherDemoOffer(), isFalse);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomePage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+            demoData: HomeDemoData(activeDelivery: null),
+          ),
+        ),
+      ),
+    );
+    expect(find.text("You're currently delivering"), findsOneWidget);
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('New Delivery Offer'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: OrdersPage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+          ),
+        ),
+      ),
+    );
+    expect(find.text("You're currently delivering"), findsOneWidget);
+    expect(find.text('New Delivery Offer'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomePage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+            demoData: HomeDemoData(activeDelivery: null),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('#MS-2051'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  testWidgets('completing delivery clears Busy and preserves Online', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: DemoDelivery.newOffer,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomePage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+            demoData: HomeDemoData(activeDelivery: null),
+          ),
+        ),
+      ),
+    );
+
+    await _scrollHomeTo(tester, find.text('View Delivery'));
+    await tester.tap(find.text('View Delivery'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Mark Delivery Complete'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Mark Delivery Complete'), findsOneWidget);
+    await tester.tap(find.text('Mark Delivery Complete'));
+    await tester.pumpAndSettle();
+
+    expect(offerStore.activeDelivery, isNull);
+    expect(offerStore.status, OrderOfferStatus.noOffer);
+    expect(offerStore.isBusy, isFalse);
+    expect(availabilityStore.isAvailable, isTrue);
+    expect(find.text('No active delivery'), findsOneWidget);
+    expect(find.text("You're currently delivering"), findsNothing);
+    expect(find.text('Delivery marked complete'), findsOneWidget);
+    expect(offerStore.showAnotherDemoOffer(), isTrue);
+    expect(offerStore.status, OrderOfferStatus.available);
+
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  testWidgets('completing delivery preserves Offline availability', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: DemoDelivery.newOffer,
+    );
+    await _pumpDeliveryEntry(tester, offerStore);
+
+    await tester.tap(find.text('Open delivery'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Mark Delivery Complete'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Mark Delivery Complete'));
+    await tester.pumpAndSettle();
+
+    expect(offerStore.activeDelivery, isNull);
+    expect(offerStore.status, OrderOfferStatus.noOffer);
+    expect(offerStore.isBusy, isFalse);
+    expect(availabilityStore.isAvailable, isFalse);
+    expect(offerStore.showAnotherDemoOffer(), isFalse);
+    expect(find.text('Delivery marked complete'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
   });
 
   testWidgets('offer countdown pauses while offline', (tester) async {
@@ -382,6 +533,42 @@ void main() {
     await tester.tap(find.text('View offer'));
     await tester.pumpAndSettle();
     expect(find.text('ACCEPT'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  testWidgets('Orders shows Busy and Offline without offer messaging', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: DemoDelivery.batchThreeActive,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: OrdersPage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text("You're currently delivering"), findsOneWidget);
+    expect(
+      find.text("You're offline; your current delivery remains active."),
+      findsOneWidget,
+    );
+    expect(find.text('Ready for delivery offers'), findsNothing);
+    expect(find.text('New Delivery Offer'), findsNothing);
+
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
@@ -432,6 +619,45 @@ void main() {
     await tester.ensureVisible(find.text('ACCEPT'));
     expect(tester.takeException(), isNull);
     await _disposeOfferHarness(tester, harness);
+  });
+
+  testWidgets('delivery completion action fits a 360x800 viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: DemoDelivery.newOffer,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: DeliveryPage(
+            delivery: DemoDelivery.newOffer,
+            offerStore: offerStore,
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.text('Mark Delivery Complete'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Mark Delivery Complete'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
   });
 
   testWidgets('home dashboard fits a narrow phone viewport', (tester) async {
@@ -526,4 +752,40 @@ Future<void> _disposeOfferHarness(
   await tester.pumpWidget(const SizedBox());
   harness.offerStore.dispose();
   harness.availabilityStore.dispose();
+}
+
+Future<void> _pumpDeliveryEntry(
+  WidgetTester tester,
+  OrderOfferStore offerStore,
+) async {
+  final delivery = offerStore.activeDelivery;
+  if (delivery == null) {
+    throw StateError('Cannot open delivery details without an active delivery');
+  }
+
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              final completed = await Navigator.of(context).push<bool>(
+                MaterialPageRoute<bool>(
+                  builder: (_) =>
+                      DeliveryPage(delivery: delivery, offerStore: offerStore),
+                ),
+              );
+              if (completed == true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Delivery marked complete')),
+                );
+              }
+            },
+            child: const Text('Open delivery'),
+          ),
+        ),
+      ),
+    ),
+  );
 }

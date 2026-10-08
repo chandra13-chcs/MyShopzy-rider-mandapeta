@@ -48,4 +48,18 @@ class DemoDelivery {
   final double? pickupDistanceKm;
   final double? deliveryDistanceKm;
   final String vehicle;
+
+  DemoDelivery copyWith({String? status}) => DemoDelivery(
+    orderId: orderId,
+    store: store,
+    customer: customer,
+    pickup: pickup,
+    drop: drop,
+    distanceKm: distanceKm,
+    payout: payout,
+    status: status ?? this.status,
+    pickupDistanceKm: pickupDistanceKm,
+    deliveryDistanceKm: deliveryDistanceKm,
+    vehicle: vehicle,
+  );
 }

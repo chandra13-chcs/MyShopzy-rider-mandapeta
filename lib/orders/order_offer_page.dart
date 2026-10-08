@@ -196,16 +196,28 @@ class OrderOfferPage extends StatelessWidget {
             Expanded(
               child: FilledButton(
                 onPressed: offerStore.canAccept
-                    ? () {
+                    ? () async {
                         if (!offerStore.acceptOffer()) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Offer accepted')),
                         );
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => DeliveryPage(delivery: delivery),
-                          ),
-                        );
+                        final completed = await Navigator.of(context)
+                            .push<bool>(
+                              MaterialPageRoute<bool>(
+                                builder: (_) => DeliveryPage(
+                                  delivery: delivery,
+                                  offerStore: offerStore,
+                                ),
+                              ),
+                            );
+                        if (!context.mounted) return;
+                        if (completed == true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Delivery marked complete'),
+                            ),
+                          );
+                        }
                       }
                     : null,
                 child: const Text('ACCEPT'),

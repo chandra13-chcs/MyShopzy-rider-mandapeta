@@ -69,7 +69,7 @@ class OrderOfferStore extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     status = OrderOfferStatus.accepted;
-    activeDelivery = offer;
+    activeDelivery = offer.copyWith(status: 'On the Way');
     notifyListeners();
     return true;
   }
@@ -80,6 +80,18 @@ class OrderOfferStore extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     status = OrderOfferStatus.rejected;
+    notifyListeners();
+    return true;
+  }
+
+  bool completeActiveDelivery(DemoDelivery delivery) {
+    if (activeDelivery?.orderId != delivery.orderId) return false;
+
+    _timer?.cancel();
+    _timer = null;
+    activeDelivery = null;
+    status = OrderOfferStatus.noOffer;
+    secondsRemaining = offerDuration.inSeconds;
     notifyListeners();
     return true;
   }

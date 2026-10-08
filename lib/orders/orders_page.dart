@@ -64,6 +64,13 @@ class OrdersPage extends StatelessWidget {
               'Complete your current delivery to receive new offers.',
               style: AppTheme.secondaryTextStyle,
             ),
+            if (!availabilityStore.isAvailable) ...[
+              const SizedBox(height: 8),
+              const Text(
+                "You're offline; your current delivery remains active.",
+                style: AppTheme.secondaryTextStyle,
+              ),
+            ],
             const SizedBox(height: 16),
             Text(
               '${delivery.orderId} · ${delivery.store}',
@@ -73,11 +80,22 @@ class OrdersPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => DeliveryPage(delivery: delivery),
-                  ),
-                ),
+                onPressed: () async {
+                  final completed = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute<bool>(
+                      builder: (_) => DeliveryPage(
+                        delivery: delivery,
+                        offerStore: offerStore,
+                      ),
+                    ),
+                  );
+                  if (!context.mounted) return;
+                  if (completed == true) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Delivery marked complete')),
+                    );
+                  }
+                },
                 child: const Text('View active delivery'),
               ),
             ),
@@ -169,9 +187,16 @@ class OrdersPage extends StatelessWidget {
 
   Widget _buildNoOfferState(BuildContext context) {
     final isExpired = offerStore.status == OrderOfferStatus.expired;
-    final title = isExpired ? 'Offer expired' : 'No new offer';
+    final wasRejected = offerStore.status == OrderOfferStatus.rejected;
+    final title = isExpired
+        ? 'Offer expired'
+        : wasRejected
+        ? 'Offer rejected'
+        : 'Ready for delivery offers';
     final message = isExpired
         ? 'No longer available'
+        : wasRejected
+        ? 'You remain online and can receive another demo offer.'
         : 'Stay online to receive nearby delivery offers.';
 
     return Card(
