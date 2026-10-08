@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/state/availability_store.dart';
+import '../core/state/order_offer_store.dart';
+import '../core/models/demo_delivery.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/section_title.dart';
 import '../core/widgets/status_badge.dart';
@@ -9,16 +11,19 @@ import '../earnings/earnings_page.dart';
 import '../help_support/help_support_page.dart';
 import '../history/history_page.dart';
 import '../orders/orders_page.dart';
+import '../orders/order_offer_page.dart';
 import 'home_demo_data.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
     required this.availabilityStore,
+    required this.offerStore,
     this.demoData = const HomeDemoData(),
     super.key,
   });
 
   final AvailabilityStore availabilityStore;
+  final OrderOfferStore offerStore;
   final HomeDemoData demoData;
 
   @override
@@ -33,50 +38,58 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final delivery = widget.demoData.activeDelivery;
-
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildHeader(),
-                const SizedBox(height: 20),
-                _buildAvailabilityCard(),
-                const SizedBox(height: 22),
-                SectionTitle(
-                  title: "Today's summary",
-                  action: 'Earnings',
-                  onAction: () => _openPage(const EarningsPage()),
+    return AnimatedBuilder(
+      animation: widget.offerStore,
+      builder: (context, child) {
+        final delivery = widget.offerStore.activeDelivery;
+        return SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildHeader(),
+                    const SizedBox(height: 20),
+                    _buildAvailabilityCard(),
+                    if (widget.offerStore.canShowOffer) ...[
+                      const SizedBox(height: 14),
+                      _buildCompactOffer(),
+                    ],
+                    const SizedBox(height: 22),
+                    SectionTitle(
+                      title: "Today's summary",
+                      action: 'Earnings',
+                      onAction: () => _openPage(const EarningsPage()),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildDailySummary(),
+                    const SizedBox(height: 22),
+                    if (delivery case final activeDelivery?) ...[
+                      SectionTitle(title: 'Active Delivery'),
+                      const SizedBox(height: 10),
+                      _buildActiveDelivery(activeDelivery),
+                    ] else
+                      _buildNoActiveDelivery(),
+                    const SizedBox(height: 22),
+                    SectionTitle(
+                      title: 'Recent Delivery',
+                      action: 'History',
+                      onAction: () => _openPage(const HistoryPage()),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildRecentDelivery(),
+                    const SizedBox(height: 22),
+                    const SectionTitle(title: 'Quick actions'),
+                    const SizedBox(height: 10),
+                    _buildQuickActions(),
+                  ]),
                 ),
-                const SizedBox(height: 10),
-                _buildDailySummary(),
-                const SizedBox(height: 22),
-                if (delivery case final activeDelivery?) ...[
-                  SectionTitle(title: 'Active Delivery'),
-                  const SizedBox(height: 10),
-                  _buildActiveDelivery(activeDelivery),
-                ] else
-                  _buildNoActiveDelivery(),
-                const SizedBox(height: 22),
-                SectionTitle(
-                  title: 'Recent Delivery',
-                  action: 'History',
-                  onAction: () => _openPage(const HistoryPage()),
-                ),
-                const SizedBox(height: 10),
-                _buildRecentDelivery(),
-                const SizedBox(height: 22),
-                const SectionTitle(title: 'Quick actions'),
-                const SizedBox(height: 10),
-                _buildQuickActions(),
-              ]),
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -126,51 +139,46 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildAvailabilityCard() {
-    return ValueListenableBuilder<AvailabilityStatus>(
-      valueListenable: widget.availabilityStore,
-      builder: (context, availability, child) {
-        final isAvailable = availability == AvailabilityStatus.available;
-        final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
+    final isAvailable = widget.availabilityStore.isAvailable;
+    final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
 
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(
-                  isAvailable ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-                  color: statusColor,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isAvailable ? "You're online" : "You're offline",
-                        style: AppTheme.cardTitle.copyWith(color: statusColor),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        isAvailable
-                            ? "You're ready to receive delivery offers."
-                            : "You're not available for new delivery offers.",
-                        style: AppTheme.secondaryTextStyle,
-                      ),
-                    ],
-                  ),
-                ),
-                Switch.adaptive(
-                  value: isAvailable,
-                  activeTrackColor: AppTheme.success,
-                  onChanged: widget.availabilityStore.setAvailable,
-                ),
-              ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(
+              isAvailable ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+              color: statusColor,
+              size: 24,
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAvailable ? "You're online" : "You're offline",
+                    style: AppTheme.cardTitle.copyWith(color: statusColor),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isAvailable
+                        ? "You're ready to receive delivery offers."
+                        : "You're not available for new delivery offers.",
+                    style: AppTheme.secondaryTextStyle,
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: isAvailable,
+              activeTrackColor: AppTheme.success,
+              onChanged: widget.availabilityStore.setAvailable,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -219,6 +227,43 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildCompactOffer() {
+    return Card(
+      child: InkWell(
+        onTap: () => _openPage(OrderOfferPage(offerStore: widget.offerStore)),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const Icon(Icons.local_offer_outlined, color: AppTheme.brand),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('New Delivery Offer', style: AppTheme.cardTitle),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${widget.offerStore.offer.store} · '
+                      '₹${widget.offerStore.offer.payout} · '
+                      '${widget.offerStore.secondsRemaining}s left',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.secondaryTextStyle,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right, color: AppTheme.secondaryText),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -303,41 +348,36 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildNoActiveDelivery() {
-    return ValueListenableBuilder<AvailabilityStatus>(
-      valueListenable: widget.availabilityStore,
-      builder: (context, availability, child) {
-        final isAvailable = availability == AvailabilityStatus.available;
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.inbox_outlined,
-                  color: AppTheme.secondaryText,
-                  size: 28,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('No active delivery', style: AppTheme.cardTitle),
-                      const SizedBox(height: 4),
-                      Text(
-                        isAvailable
-                            ? 'Stay online to receive nearby delivery offers.'
-                            : 'Go online when you are ready to receive delivery offers.',
-                        style: AppTheme.secondaryTextStyle,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    final isAvailable = widget.availabilityStore.isAvailable;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.inbox_outlined,
+              color: AppTheme.secondaryText,
+              size: 28,
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('No active delivery', style: AppTheme.cardTitle),
+                  const SizedBox(height: 4),
+                  Text(
+                    isAvailable
+                        ? 'Stay online to receive nearby delivery offers.'
+                        : 'Go online when you are ready to receive delivery offers.',
+                    style: AppTheme.secondaryTextStyle,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -400,7 +440,10 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.receipt_long_outlined,
                 label: 'Orders',
                 onTap: () => _openPage(
-                  OrdersPage(availabilityStore: widget.availabilityStore),
+                  OrdersPage(
+                    availabilityStore: widget.availabilityStore,
+                    offerStore: widget.offerStore,
+                  ),
                 ),
               ),
             ),

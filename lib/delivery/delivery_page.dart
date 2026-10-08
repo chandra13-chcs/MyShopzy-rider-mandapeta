@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/models/demo_delivery.dart';
 
 class DeliveryPage extends StatelessWidget {
-  const DeliveryPage({super.key});
+  const DeliveryPage({
+    this.delivery = DemoDelivery.batchThreeActive,
+    super.key,
+  });
+
+  final DemoDelivery delivery;
 
   @override
   Widget build(BuildContext context) {
@@ -30,38 +36,41 @@ class DeliveryPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Text('Order #MS-2048', style: AppTheme.screenTitle),
+          Text('Order ${delivery.orderId}', style: AppTheme.screenTitle),
           const SizedBox(height: 5),
-          const Text(
-            'Grocery delivery · 2.4 km',
+          Text(
+            'Grocery delivery · ${delivery.distanceKm.toStringAsFixed(1)} km',
             style: AppTheme.secondaryTextStyle,
           ),
           const SizedBox(height: 20),
-          const _StopCard(
+          _StopCard(
             step: '1',
             title: 'Pickup from store',
-            place: 'Fresh Basket',
-            address: '12 Market Road, Mandapeta',
+            place: delivery.store,
+            address: '${delivery.pickup}, Mandapeta',
           ),
           const SizedBox(height: 12),
-          const _StopCard(
+          _StopCard(
             step: '2',
             title: 'Deliver to customer',
-            place: 'Ananya Reddy',
-            address: 'Lakshmi Nagar, Mandapeta',
+            place: delivery.customer,
+            address: '${delivery.drop}, Mandapeta',
           ),
           const SizedBox(height: 18),
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(18),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
-                  Icon(Icons.payments_outlined, color: AppTheme.brand),
-                  SizedBox(width: 12),
-                  Expanded(child: Text('Your estimated payout')),
+                  const Icon(Icons.payments_outlined, color: AppTheme.brand),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Your estimated payout')),
                   Text(
-                    '₹ 85',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                    '₹ ${delivery.payout}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                    ),
                   ),
                 ],
               ),

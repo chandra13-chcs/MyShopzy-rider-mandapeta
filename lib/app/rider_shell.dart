@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/state/availability_store.dart';
+import '../core/state/order_offer_store.dart';
 import '../earnings/earnings_page.dart';
+import '../home/home_demo_data.dart';
 import '../home/home_page.dart';
 import '../orders/orders_page.dart';
 import '../profile/profile_page.dart';
@@ -17,15 +19,20 @@ class _RiderShellState extends State<RiderShell> {
   int _selectedIndex = 0;
 
   late final _availabilityStore = AvailabilityStore();
+  late final _offerStore = OrderOfferStore(
+    availabilityStore: _availabilityStore,
+    activeDelivery: HomeDemoData().activeDelivery,
+  );
   late final _pages = [
-    HomePage(availabilityStore: _availabilityStore),
-    OrdersPage(availabilityStore: _availabilityStore),
+    HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
+    OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     const EarningsPage(),
     const ProfilePage(),
   ];
 
   @override
   void dispose() {
+    _offerStore.dispose();
     _availabilityStore.dispose();
     super.dispose();
   }
