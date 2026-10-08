@@ -53,18 +53,12 @@ void main() {
   testWidgets('active delivery card shows its demo details', (tester) async {
     await tester.pumpWidget(const RiderApp());
 
-    await _scrollHomeTo(tester, find.text('Active Delivery'));
+    await _scrollHomeTo(tester, find.text('Current Delivery'));
     expect(find.text('#MS-2048'), findsOneWidget);
-    expect(find.text('Fresh Basket'), findsNWidgets(2));
-    expect(find.text('Ananya Reddy'), findsOneWidget);
-    expect(find.text('12 Market Road'), findsOneWidget);
-    expect(find.text('Lakshmi Nagar'), findsOneWidget);
-    expect(find.text('On the Way'), findsOneWidget);
-    expect(find.text('2.4 km'), findsOneWidget);
-    expect(find.text('₹85'), findsNWidgets(2));
-    await _scrollHomeTo(tester, find.text("You're currently delivering"));
-    expect(find.text("You're currently delivering"), findsOneWidget);
-    expect(find.text('View Delivery'), findsOneWidget);
+    expect(find.text('Going to Customer'), findsOneWidget);
+    expect(find.text('Continue Delivery'), findsOneWidget);
+    expect(find.text('Quick actions'), findsNothing);
+    expect(find.text('Recent Delivery'), findsNothing);
   });
 
   testWidgets('empty active delivery state is available for demo data', (
@@ -75,6 +69,7 @@ void main() {
       availabilityStore: availabilityStore,
       activeDelivery: null,
     );
+    expect(offerStore.rejectOffer(), isTrue);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -91,32 +86,23 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('No active delivery'));
-    expect(find.text('No active delivery'), findsOneWidget);
-    expect(
-      find.text('Go online when you are ready to receive delivery offers.'),
-      findsOneWidget,
-    );
+    expect(find.text('Go online to receive new orders.'), findsOneWidget);
     await _scrollHomeToTop(tester);
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('No active delivery'));
-    expect(
-      find.text('Stay online to receive nearby delivery offers.'),
-      findsOneWidget,
-    );
+    expect(find.text('Waiting for new orders'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
   });
 
-  testWidgets('View Delivery opens existing delivery details', (tester) async {
+  testWidgets('Continue Delivery opens active delivery details', (
+    tester,
+  ) async {
     await tester.pumpWidget(const RiderApp());
 
-    await _scrollHomeTo(tester, find.text('View Delivery'));
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -120));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('View Delivery'));
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
 
     expect(find.text('Delivery details'), findsOneWidget);
@@ -135,10 +121,8 @@ void main() {
     expect(find.text("You're offline"), findsOneWidget);
     await _scrollHomeTo(tester, find.text('#MS-2048'));
     expect(find.text('#MS-2048'), findsOneWidget);
-    expect(find.text('View Delivery'), findsOneWidget);
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -120));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('View Delivery'));
+    expect(find.text('Continue Delivery'), findsOneWidget);
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
     expect(find.text('Delivery details'), findsOneWidget);
   });
@@ -172,46 +156,12 @@ void main() {
     expect(find.text("You're currently delivering"), findsOneWidget);
   });
 
-  testWidgets('home quick actions open their destinations', (tester) async {
+  testWidgets('home omits duplicate shortcuts and recent delivery', (
+    tester,
+  ) async {
     await tester.pumpWidget(const RiderApp());
-
-    await _scrollHomeTo(
-      tester,
-      find.byKey(const ValueKey('home-action-Orders')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-action-Orders')));
-    await tester.pumpAndSettle();
-    expect(find.text("You're currently delivering"), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    await _scrollHomeTo(
-      tester,
-      find.byKey(const ValueKey('home-action-History')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-action-History')));
-    await tester.pumpAndSettle();
-    expect(find.text('Delivery history'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    await _scrollHomeTo(
-      tester,
-      find.byKey(const ValueKey('home-action-Earnings')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-action-Earnings')));
-    await tester.pumpAndSettle();
-    expect(find.text('Earnings breakdown'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    await _scrollHomeTo(
-      tester,
-      find.byKey(const ValueKey('home-action-Help & Support')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-action-Help & Support')));
-    await tester.pumpAndSettle();
-    expect(find.text('Frequently asked'), findsOneWidget);
+    expect(find.text('Quick actions'), findsNothing);
+    expect(find.text('Recent Delivery'), findsNothing);
   });
 
   testWidgets('Home state stays intact across bottom tabs', (tester) async {
@@ -289,9 +239,7 @@ void main() {
     expect(harness.offerStore.pickupStatus, PickupStatus.goingToPickup);
     expect(find.text('Delivery details'), findsOneWidget);
     expect(find.text('Going to Pickup'), findsOneWidget);
-    expect(find.text('Pickup Location'), findsOneWidget);
-    expect(find.text('12 Market Road'), findsOneWidget);
-    expect(find.text('Navigate to Pickup'), findsOneWidget);
+    expect(find.textContaining('12 Market Road'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Reached Store'),
       250,
@@ -305,7 +253,7 @@ void main() {
   });
 
   testWidgets(
-    'pickup requires explicit actions and stays Busy until complete',
+    'pickup and customer flow uses only the required explicit actions',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
@@ -328,31 +276,23 @@ void main() {
 
       expect(offerStore.pickupStatus, PickupStatus.goingToPickup);
       expect(offerStore.openOrderDetails(delivery), isFalse);
-      expect(offerStore.beginPickupVerification(delivery), isFalse);
       expect(offerStore.verifyPickup(delivery, '2051'), isFalse);
       expect(offerStore.reachStore(DemoDelivery.batchThreeActive), isFalse);
       expect(offerStore.completeActiveDelivery(delivery), isFalse);
       expect(offerStore.isBusy, isTrue);
       expect(offerStore.showAnotherDemoOffer(), isFalse);
+      expect(find.text('Going to Pickup'), findsOneWidget);
 
       await tester.scrollUntilVisible(
-        find.text('Navigate to Pickup'),
-        250,
+        find.widgetWithText(FilledButton, 'Reached Store'),
+        200,
         scrollable: find.byType(Scrollable).last,
       );
-      await tester.tap(find.text('Navigate to Pickup'));
-      await tester.pumpAndSettle();
-      expect(find.text('Navigation started'), findsOneWidget);
-      expect(offerStore.pickupStatus, PickupStatus.goingToPickup);
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView).last, const Offset(0, -150));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Reached Store'));
       await tester.pumpAndSettle();
       expect(offerStore.pickupStatus, PickupStatus.reachedPickup);
-      expect(find.text("You're at the pickup location."), findsOneWidget);
-      expect(find.text('View Order Details'), findsOneWidget);
+      expect(find.text('Reached Store'), findsOneWidget);
+      expect(find.text('Order Details'), findsWidgets);
       expect(tester.takeException(), isNull);
 
       availabilityStore.setAvailable(false);
@@ -360,109 +300,59 @@ void main() {
       expect(offerStore.activeDelivery, same(delivery));
       expect(offerStore.pickupStatus, PickupStatus.reachedPickup);
       expect(offerStore.isBusy, isTrue);
-      expect(offerStore.beginPickupVerification(delivery), isFalse);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: DeliveryPage(delivery: delivery, offerStore: offerStore),
-        ),
-      );
       await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'View Order Details'),
-        250,
+        find.widgetWithText(FilledButton, 'Order Details'),
+        200,
         scrollable: find.byType(Scrollable).last,
       );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -300));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'View Order Details'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Order Details'));
       await tester.pumpAndSettle();
       expect(offerStore.pickupStatus, PickupStatus.orderDetails);
-      expect(find.text('Order Details'), findsOneWidget);
-      expect(find.text('Verify the order before pickup.'), findsOneWidget);
-      expect(find.text('Order #MS-2051'), findsNWidgets(2));
-      expect(find.text('2 × Chicken Biryani'), findsOneWidget);
-      expect(find.text('1 × Coke'), findsOneWidget);
+      expect(find.text('Order Details'), findsWidgets);
       final verifyButton = find.widgetWithText(FilledButton, 'Verify Pickup');
-      await tester.scrollUntilVisible(
-        verifyButton,
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
+      await tester.drag(find.byType(ListView).last, const Offset(0, -350));
       await tester.pumpAndSettle();
-      await tester.tap(verifyButton);
-      await tester.pumpAndSettle();
-      expect(offerStore.pickupStatus, PickupStatus.pickupVerification);
-      expect(
-        find.text('Enter the last 4 digits of the Order ID.'),
-        findsOneWidget,
-      );
-
-      await tester.scrollUntilVisible(
-        verifyButton,
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
-      await tester.pumpAndSettle();
+      await tester.ensureVisible(verifyButton);
       await tester.tap(verifyButton);
       await tester.pumpAndSettle();
       expect(find.text('Enter the last 4 digits.'), findsOneWidget);
 
       await tester.enterText(find.byType(TextFormField), '1234');
-      await tester.scrollUntilVisible(
-        verifyButton,
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
+      await tester.drag(find.byType(ListView).last, const Offset(0, -200));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(verifyButton);
       await tester.tap(verifyButton);
       await tester.pumpAndSettle();
       expect(find.text('Those digits do not match the order.'), findsOneWidget);
-      expect(offerStore.pickupStatus, PickupStatus.pickupVerification);
+      expect(offerStore.pickupStatus, PickupStatus.orderDetails);
       expect(offerStore.verifyPickup(delivery, '20a51'), isFalse);
 
       await tester.enterText(find.byType(TextFormField), '2051');
-      await tester.scrollUntilVisible(
-        verifyButton,
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
+      await tester.drag(find.byType(ListView).last, const Offset(0, -200));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(verifyButton);
       await tester.tap(verifyButton);
       await tester.pumpAndSettle();
       expect(offerStore.pickupStatus, PickupStatus.pickedUp);
-      expect(find.text('Pickup Verified'), findsOneWidget);
-      expect(find.text('Store: Fresh Basket'), findsOneWidget);
-      expect(find.text('Continue to Customer'), findsOneWidget);
+      expect(find.text('Pickup Confirmed'), findsWidgets);
+      expect(find.text('Start Delivery'), findsOneWidget);
       expect(offerStore.isBusy, isTrue);
       expect(offerStore.showAnotherDemoOffer(), isFalse);
       expect(offerStore.completeActiveDelivery(delivery), isFalse);
       expect(tester.takeException(), isNull);
 
-      await tester.scrollUntilVisible(
-        find.text('Continue to Customer'),
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Continue to Customer'));
+      await tester.ensureVisible(find.text('Start Delivery'));
+      await tester.tap(find.text('Start Delivery'));
       await tester.pumpAndSettle();
       expect(offerStore.pickupStatus, PickupStatus.onTheWay);
-      expect(find.text('On the Way'), findsOneWidget);
+      expect(find.text('Going to Customer'), findsOneWidget);
       expect(find.text('Customer: Ananya Reddy'), findsOneWidget);
-      expect(find.text('Drop: Lakshmi Nagar'), findsOneWidget);
-      expect(find.text('Delivery distance: 2.4 km'), findsOneWidget);
-      expect(find.text('Payout: ₹95'), findsOneWidget);
       expect(offerStore.completeActiveDelivery(delivery), isFalse);
       expect(offerStore.isBusy, isTrue);
       expect(tester.takeException(), isNull);
 
-      expect(find.text('Arriving at Customer'), findsOneWidget);
+      expect(find.text('Reached Customer'), findsOneWidget);
       expect(offerStore.isBusy, isTrue);
       expect(offerStore.canAccept, isFalse);
       expect(offerStore.acceptOffer(), isFalse);
@@ -470,39 +360,23 @@ void main() {
       expect(tester.takeException(), isNull);
 
       expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      expect(offerStore.startDeliveryConfirmation(delivery), isFalse);
-      await tester.scrollUntilVisible(
-        find.text('Arriving at Customer'),
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
+      await tester.dragFrom(const Offset(180, 650), const Offset(0, -500));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Arriving at Customer'));
+      await tester.tap(find.text('Reached Customer'));
       await tester.pumpAndSettle();
-      expect(offerStore.deliveryStatus, DeliveryStatus.arriving);
+      expect(offerStore.deliveryStatus, DeliveryStatus.reachedCustomer);
       expect(offerStore.isBusy, isTrue);
       expect(offerStore.showAnotherDemoOffer(), isFalse);
-      await tester.scrollUntilVisible(
-        find.text('Start Delivery Confirmation'),
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
+      expect(find.text('Customer & Order Details'), findsOneWidget);
+      expect(find.text('Hand Over'), findsOneWidget);
+      await tester.tap(find.text('Hand Over'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Start Delivery Confirmation'));
-      await tester.pumpAndSettle();
-      expect(offerStore.deliveryStatus, DeliveryStatus.confirmingDelivery);
+      expect(offerStore.deliveryStatus, DeliveryStatus.handOver);
       expect(offerStore.isBusy, isTrue);
       expect(offerStore.showAnotherDemoOffer(), isFalse);
-      await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'Confirm Delivery'),
-        250,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.drag(find.byType(ListView).last, const Offset(0, -250));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm Delivery'));
+      expect(find.text('Mark Delivered'), findsOneWidget);
+      await _scrollDeliveryActionIntoView(tester, find.text('Mark Delivered'));
+      await tester.tap(find.text('Mark Delivered'));
       await tester.pumpAndSettle();
       expect(offerStore.deliveryStatus, DeliveryStatus.delivered);
       expect(offerStore.activeDelivery, isNull);
@@ -510,15 +384,8 @@ void main() {
       expect(offerStore.completeActiveDelivery(delivery), isFalse);
       expect(availabilityStore.isAvailable, isFalse);
       expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(find.text('Delivered'), findsOneWidget);
       expect(find.text('Delivery completed successfully.'), findsOneWidget);
-      expect(find.text('Order #MS-2051'), findsNWidgets(2));
-      expect(find.text('Customer: Ananya Reddy'), findsOneWidget);
-      expect(find.text('Drop: Lakshmi Nagar'), findsOneWidget);
-      expect(find.text('Payout: ₹95'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
       offerStore.dispose();
       availabilityStore.dispose();
@@ -582,35 +449,24 @@ void main() {
       ),
     );
 
-    await _scrollHomeTo(tester, find.text('View Delivery'));
-    await tester.tap(find.text('View Delivery'));
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
-    expect(find.text('At Store'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('At Store'),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
+    expect(find.text('Reached Store'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('tab-orders')));
     await tester.pumpAndSettle();
-    expect(find.text('Status: At Store'), findsOneWidget);
+    expect(find.text('Status: Reached Store'), findsOneWidget);
     expect(find.text('New Delivery Offer'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('tab-home')));
     await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('View Delivery'));
-    await tester.tap(find.text('View Delivery'));
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
-    expect(find.text('At Store'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text("You're at the pickup location."),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text("You're at the pickup location."), findsOneWidget);
+    expect(find.text('Reached Store'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
@@ -678,43 +534,35 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('delivery-tab-orders')));
     await tester.pumpAndSettle();
-    expect(find.text('Status: Arriving'), findsOneWidget);
+    expect(find.text('Status: Reached Customer'), findsOneWidget);
     expect(offerStore.isBusy, isTrue);
     expect(offerStore.canAccept, isFalse);
     expect(find.text('New Delivery Offer'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('delivery-tab-home')));
     await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('View Delivery'));
-    await tester.tap(find.text('View Delivery'));
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
-    expect(find.text('Arriving'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('You are arriving at the delivery location.'),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(
-      find.text('You are arriving at the delivery location.'),
-      findsOneWidget,
-    );
+    expect(find.text('Reached Customer'), findsOneWidget);
+    expect(find.text('Customer & Order Details'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
     availabilityStore.setAvailable(false);
     await tester.pumpAndSettle();
     expect(offerStore.activeDelivery, same(delivery));
-    expect(offerStore.deliveryStatus, DeliveryStatus.arriving);
+    expect(offerStore.deliveryStatus, DeliveryStatus.reachedCustomer);
     expect(offerStore.isBusy, isTrue);
-    expect(offerStore.startDeliveryConfirmation(delivery), isTrue);
+    expect(offerStore.handOverOrder(delivery), isTrue);
 
     await tester.tap(find.byKey(const ValueKey('delivery-tab-orders')));
     await tester.pumpAndSettle();
-    expect(find.text('Status: Confirm Delivery'), findsOneWidget);
+    expect(find.text('Status: Hand Over'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('delivery-tab-home')));
     await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('Confirm Delivery'));
-    expect(find.text('Confirm Delivery'), findsOneWidget);
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    expect(find.text('Hand Over'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
@@ -807,9 +655,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text("You're currently delivering"), findsOneWidget);
+    expect(
+      find.text("You're currently delivering; new offers are paused."),
+      findsOneWidget,
+    );
     expect(find.text('#MS-2051'), findsOneWidget);
-    expect(find.text('New Delivery Offer'), findsNothing);
+    expect(find.text('New order offer'), findsNothing);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -865,29 +716,26 @@ void main() {
       ),
     );
 
-    await _scrollHomeTo(tester, find.text('View Delivery'));
-    await tester.tap(find.text('View Delivery'));
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Confirm Delivery'),
+      find.widgetWithText(FilledButton, 'Mark Delivered'),
       300,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.drag(find.byType(ListView).last, const Offset(0, -250));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Delivery'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark Delivered'));
     await tester.pumpAndSettle();
 
     expect(offerStore.activeDelivery, isNull);
     expect(offerStore.status, OrderOfferStatus.noOffer);
     expect(offerStore.isBusy, isFalse);
     expect(availabilityStore.isAvailable, isTrue);
-    expect(find.text('Delivery completed successfully.'), findsOneWidget);
     expect(offerStore.showAnotherDemoOffer(), isTrue);
     expect(offerStore.status, OrderOfferStatus.available);
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-    await _scrollHomeTo(tester, find.text('No active delivery'));
+    await _scrollHomeTo(tester, find.text('Waiting for new orders'));
     expect(find.text("You're currently delivering"), findsNothing);
     expect(find.text('Delivery marked complete'), findsOneWidget);
 
@@ -912,13 +760,13 @@ void main() {
     await tester.tap(find.text('Open delivery'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Confirm Delivery'),
+      find.widgetWithText(FilledButton, 'Mark Delivered'),
       300,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.drag(find.byType(ListView).last, const Offset(0, -250));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Delivery'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark Delivered'));
     await tester.pumpAndSettle();
 
     expect(offerStore.activeDelivery, isNull);
@@ -926,10 +774,7 @@ void main() {
     expect(offerStore.isBusy, isFalse);
     expect(availabilityStore.isAvailable, isFalse);
     expect(offerStore.showAnotherDemoOffer(), isFalse);
-    expect(find.text('Delivery completed successfully.'), findsOneWidget);
     expect(offerStore.completeActiveDelivery(DemoDelivery.newOffer), isFalse);
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
     expect(find.text('Delivery marked complete'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
@@ -1013,14 +858,16 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Ready for delivery offers'), findsNothing);
-    expect(find.text('New Delivery Offer'), findsNothing);
+    expect(find.text('New order offer'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
   });
 
-  testWidgets('Home shows a compact offer only when eligible', (tester) async {
+  testWidgets('Home shows full offer only when online and eligible', (
+    tester,
+  ) async {
     final availabilityStore = AvailabilityStore();
     final offerStore = OrderOfferStore(
       availabilityStore: availabilityStore,
@@ -1038,15 +885,71 @@ void main() {
         ),
       ),
     );
-    expect(find.text('New Delivery Offer'), findsOneWidget);
+    expect(find.text('New order offer'), findsOneWidget);
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('Fresh Basket'), findsOneWidget);
+    expect(find.text('12 Market Road'), findsOneWidget);
+    expect(find.text('Lakshmi Nagar'), findsOneWidget);
+    expect(find.text('1.8 km'), findsOneWidget);
+    expect(find.text('2.4 km'), findsOneWidget);
+    expect(find.text('4.2 km'), findsOneWidget);
+    expect(find.text('₹95'), findsOneWidget);
+    expect(find.text('Bike'), findsOneWidget);
+    expect(find.text('Accept'), findsOneWidget);
+    expect(find.text('Reject'), findsOneWidget);
 
     availabilityStore.setAvailable(false);
     await tester.pump();
-    expect(find.text('New Delivery Offer'), findsNothing);
+    expect(find.text('New order offer'), findsNothing);
+    expect(offerStore.canAccept, isFalse);
+    expect(offerStore.acceptOffer(), isFalse);
 
     availabilityStore.setAvailable(true);
     await tester.pump();
-    expect(find.text('New Delivery Offer'), findsOneWidget);
+    expect(find.text('New order offer'), findsOneWidget);
+    await _scrollHomeTo(tester, find.text('Reject'));
+    await tester.tap(find.text('Reject'));
+    await tester.pumpAndSettle();
+    expect(offerStore.status, OrderOfferStatus.rejected);
+    expect(offerStore.activeDelivery, isNull);
+    expect(availabilityStore.isAvailable, isTrue);
+    expect(find.text('New order offer'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  testWidgets('Home accepts the new order and prioritizes active delivery', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HomePage(
+          availabilityStore: availabilityStore,
+          offerStore: offerStore,
+          demoData: HomeDemoData(activeDelivery: null),
+        ),
+      ),
+    );
+
+    await _scrollHomeTo(tester, find.text('Accept'));
+    await tester.tap(find.text('Accept'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery details'), findsOneWidget);
+    expect(offerStore.activeDelivery?.orderId, '#MS-2051');
+    expect(offerStore.isBusy, isTrue);
+    expect(offerStore.canShowOffer, isFalse);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Current Delivery'), findsOneWidget);
+    expect(find.text('New order offer'), findsNothing);
+
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
@@ -1095,15 +998,12 @@ void main() {
 
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Confirm Delivery'),
+      find.widgetWithText(FilledButton, 'Mark Delivered'),
       250,
       scrollable: find.byType(Scrollable).first,
     );
     expect(tester.takeException(), isNull);
-    expect(
-      find.widgetWithText(FilledButton, 'Confirm Delivery'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(FilledButton, 'Mark Delivered'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox());
@@ -1386,7 +1286,10 @@ void main() {
     await tester.pumpWidget(const RiderApp());
     expect(tester.takeException(), isNull);
 
-    await _scrollHomeTo(tester, find.text('Quick actions'));
+    expect(find.text('Quick actions'), findsNothing);
+    expect(find.text('Recent Delivery'), findsNothing);
+    expect(find.text("Today's summary"), findsOneWidget);
+    expect(find.text('Continue Delivery'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Home').last);
@@ -1714,8 +1617,8 @@ void _advanceActiveDeliveryToConfirmation(OrderOfferStore offerStore) {
   final delivery = offerStore.activeDelivery;
   if (delivery == null ||
       !offerStore.arriveAtCustomer(delivery) ||
-      !offerStore.startDeliveryConfirmation(delivery)) {
-    throw StateError('Could not advance active delivery to confirmation');
+      !offerStore.handOverOrder(delivery)) {
+    throw StateError('Could not advance active delivery to hand over');
   }
 }
 
@@ -1724,7 +1627,6 @@ void _advancePickupToPickedUp(OrderOfferStore offerStore) {
   if (delivery == null ||
       !offerStore.reachStore(delivery) ||
       !offerStore.openOrderDetails(delivery) ||
-      !offerStore.beginPickupVerification(delivery) ||
       !offerStore.verifyPickup(delivery, '2051')) {
     throw StateError('Could not advance pickup to verified state');
   }
@@ -1742,6 +1644,19 @@ Future<void> _scrollHomeTo(WidgetTester tester, Finder target) async {
   expect(target, findsOneWidget);
   await tester.ensureVisible(target);
   await tester.pumpAndSettle();
+}
+
+Future<void> _scrollDeliveryActionIntoView(
+  WidgetTester tester,
+  Finder action,
+) async {
+  await tester.scrollUntilVisible(
+    action,
+    200,
+    scrollable: find
+        .ancestor(of: action, matching: find.byType(Scrollable))
+        .first,
+  );
 }
 
 Future<void> _scrollHomeToTop(WidgetTester tester) async {

@@ -7,11 +7,6 @@ import '../core/theme/app_theme.dart';
 import '../core/widgets/section_title.dart';
 import '../core/widgets/status_badge.dart';
 import '../delivery/delivery_page.dart';
-import '../earnings/earnings_page.dart';
-import '../help_support/help_support_page.dart';
-import '../history/history_page.dart';
-import '../orders/orders_page.dart';
-import '../orders/order_offer_page.dart';
 import 'home_demo_data.dart';
 
 class HomePage extends StatefulWidget {
@@ -31,11 +26,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Future<void> _openPage(Widget page) async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => page));
-  }
-
   Future<void> _openDeliveryPage(DemoDelivery delivery) async {
     final completed = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
@@ -67,37 +57,21 @@ class _HomePageState extends State<HomePage> {
                     _buildHeader(),
                     const SizedBox(height: 20),
                     _buildAvailabilityCard(),
-                    if (widget.offerStore.canShowOffer) ...[
-                      const SizedBox(height: 14),
-                      _buildCompactOffer(),
-                    ],
                     const SizedBox(height: 22),
-                    SectionTitle(
-                      title: "Today's summary",
-                      action: 'Earnings',
-                      onAction: () => _openPage(const EarningsPage()),
-                    ),
+                    SectionTitle(title: "Today's summary"),
                     const SizedBox(height: 10),
                     _buildDailySummary(),
                     const SizedBox(height: 22),
                     if (delivery case final activeDelivery?) ...[
-                      SectionTitle(title: 'Active Delivery'),
+                      SectionTitle(title: 'Current Delivery'),
                       const SizedBox(height: 10),
                       _buildActiveDelivery(activeDelivery),
+                    ] else if (widget.offerStore.canShowOffer) ...[
+                      const SectionTitle(title: 'New Order'),
+                      const SizedBox(height: 10),
+                      _buildNewOrder(),
                     ] else
-                      _buildNoActiveDelivery(),
-                    const SizedBox(height: 22),
-                    SectionTitle(
-                      title: 'Recent Delivery',
-                      action: 'History',
-                      onAction: () => _openPage(const HistoryPage()),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildRecentDelivery(),
-                    const SizedBox(height: 22),
-                    const SectionTitle(title: 'Quick actions'),
-                    const SizedBox(height: 10),
-                    _buildQuickActions(),
+                      _buildWaitingState(),
                   ]),
                 ),
               ),
@@ -142,12 +116,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 8),
-        IconButton.filledTonal(
-          onPressed: () => _openPage(const HelpSupportPage()),
-          tooltip: 'Help and support',
-          icon: const Icon(Icons.support_agent_rounded),
         ),
       ],
     );
@@ -248,58 +216,91 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCompactOffer() {
-    return Card(
-      child: InkWell(
-        onTap: () => _openPage(OrderOfferPage(offerStore: widget.offerStore)),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              const Icon(Icons.local_offer_outlined, color: AppTheme.brand),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('New Delivery Offer', style: AppTheme.cardTitle),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${widget.offerStore.offer.store} · '
-                      '₹${widget.offerStore.offer.payout} · '
-                      '${widget.offerStore.secondsRemaining}s left',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.secondaryTextStyle,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right, color: AppTheme.secondaryText),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActiveDelivery(DemoDelivery delivery) {
+  Widget _buildNewOrder() {
+    final offer = widget.offerStore.offer;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "You're currently delivering",
-              style: AppTheme.secondaryTextStyle.copyWith(
-                color: AppTheme.warning,
-                fontWeight: FontWeight.w700,
-              ),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('New order offer', style: AppTheme.cardTitle),
+                ),
+                StatusBadge(
+                  label: '${widget.offerStore.secondsRemaining}s',
+                  color: AppTheme.brand,
+                  backgroundColor: AppTheme.brandSoft,
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            Text(offer.orderId, style: AppTheme.bodyText),
             const SizedBox(height: 10),
+            _OfferSummaryRow(label: 'Store', value: offer.store),
+            _OfferSummaryRow(label: 'Pickup', value: offer.pickup),
+            _OfferSummaryRow(
+              label: 'Pickup distance',
+              value:
+                  '${offer.pickupDistanceKm?.toStringAsFixed(1) ?? '1.8'} km',
+            ),
+            _OfferSummaryRow(label: 'Drop', value: offer.drop),
+            _OfferSummaryRow(
+              label: 'Delivery distance',
+              value:
+                  '${offer.deliveryDistanceKm?.toStringAsFixed(1) ?? '2.4'} km',
+            ),
+            _OfferSummaryRow(
+              label: 'Total distance',
+              value: '${offer.distanceKm.toStringAsFixed(1)} km',
+            ),
+            _OfferSummaryRow(
+              label: 'Estimated payout',
+              value: '₹${offer.payout}',
+            ),
+            _OfferSummaryRow(label: 'Vehicle', value: offer.vehicle),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: widget.offerStore.canAccept
+                        ? () => widget.offerStore.rejectOffer()
+                        : null,
+                    child: const Text('Reject'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: widget.offerStore.canAccept
+                        ? () => _acceptOffer(offer)
+                        : null,
+                    child: const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptOffer(DemoDelivery delivery) async {
+    if (!widget.offerStore.acceptOffer()) return;
+    await _openDeliveryPage(delivery);
+  }
+
+  Widget _buildActiveDelivery(DemoDelivery delivery) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
                 Expanded(
@@ -313,58 +314,18 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(width: 8),
                 StatusBadge(
                   label: widget.offerStore.activeDeliveryStatus,
-                  color: AppTheme.success,
-                  backgroundColor: AppTheme.successSoft,
+                  color: AppTheme.brand,
+                  backgroundColor: AppTheme.brandSoft,
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            _DeliveryDetailRow(
-              icon: Icons.storefront_outlined,
-              label: 'Store',
-              value: delivery.store,
-            ),
-            const SizedBox(height: 10),
-            _DeliveryDetailRow(
-              icon: Icons.person_outline_rounded,
-              label: 'Customer',
-              value: delivery.customer,
-            ),
-            const SizedBox(height: 10),
-            _DeliveryDetailRow(
-              icon: Icons.store_mall_directory_outlined,
-              label: 'Pickup',
-              value: delivery.pickup,
-            ),
-            const SizedBox(height: 10),
-            _DeliveryDetailRow(
-              icon: Icons.location_on_outlined,
-              label: 'Drop',
-              value: delivery.drop,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _InlineMetric(
-                  icon: Icons.route_outlined,
-                  text: '${delivery.distanceKm.toStringAsFixed(1)} km',
-                ),
-                _InlineMetric(
-                  icon: Icons.payments_outlined,
-                  text: '₹${delivery.payout}',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: () => _openDeliveryPage(delivery),
                 icon: const Icon(Icons.arrow_forward_rounded),
-                label: const Text('View Delivery'),
+                label: const Text('Continue Delivery'),
               ),
             ),
           ],
@@ -373,137 +334,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildNoActiveDelivery() {
+  Widget _buildWaitingState() {
     final isAvailable = widget.availabilityStore.isAvailable;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.inbox_outlined,
-              color: AppTheme.secondaryText,
-              size: 28,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('No active delivery', style: AppTheme.cardTitle),
-                  const SizedBox(height: 4),
-                  Text(
-                    isAvailable
-                        ? 'Stay online to receive nearby delivery offers.'
-                        : 'Go online when you are ready to receive delivery offers.',
-                    style: AppTheme.secondaryTextStyle,
-                  ),
-                ],
-              ),
-            ),
-          ],
+      child: ListTile(
+        leading: Icon(
+          isAvailable ? Icons.hourglass_empty_rounded : Icons.wifi_off_rounded,
+          color: isAvailable ? AppTheme.brand : AppTheme.secondaryText,
+        ),
+        title: Text(
+          isAvailable ? 'Waiting for new orders' : "You're offline",
+          style: AppTheme.cardTitle,
+        ),
+        subtitle: Text(
+          isAvailable
+              ? 'A new order will appear here.'
+              : 'Go online to receive new orders.',
+          style: AppTheme.secondaryTextStyle,
         ),
       ),
-    );
-  }
-
-  Widget _buildRecentDelivery() {
-    final delivery = widget.demoData.recentDelivery;
-    return Card(
-      child: InkWell(
-        onTap: () => _openPage(const DeliveryPage()),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: AppTheme.successSoft,
-                child: Icon(Icons.check_rounded, color: AppTheme.success),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      delivery.store,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.bodyText.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${delivery.distanceKm.toStringAsFixed(1)} km · Delivered',
-                      style: AppTheme.smallStatus,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '₹${delivery.payout}',
-                style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right, color: AppTheme.secondaryText),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _QuickAction(
-                icon: Icons.receipt_long_outlined,
-                label: 'Orders',
-                onTap: () => _openPage(
-                  OrdersPage(
-                    availabilityStore: widget.availabilityStore,
-                    offerStore: widget.offerStore,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickAction(
-                icon: Icons.history_rounded,
-                label: 'History',
-                onTap: () => _openPage(const HistoryPage()),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _QuickAction(
-                icon: Icons.account_balance_wallet_outlined,
-                label: 'Earnings',
-                onTap: () => _openPage(const EarningsPage()),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickAction(
-                icon: Icons.help_outline_rounded,
-                label: 'Help & Support',
-                onTap: () => _openPage(const HelpSupportPage()),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -564,104 +413,25 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _DeliveryDetailRow extends StatelessWidget {
-  const _DeliveryDetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _OfferSummaryRow extends StatelessWidget {
+  const _OfferSummaryRow({required this.label, required this.value});
 
-  final IconData icon;
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppTheme.secondaryText, size: 19),
-        const SizedBox(width: 9),
-        SizedBox(width: 68, child: Text(label, style: AppTheme.smallStatus)),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
-          ),
+        SizedBox(
+          width: 124,
+          child: Text(label, style: AppTheme.secondaryTextStyle),
         ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(value, style: AppTheme.bodyText)),
       ],
-    );
-  }
-}
-
-class _InlineMetric extends StatelessWidget {
-  const _InlineMetric({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppTheme.secondaryText, size: 17),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        key: ValueKey('home-action-$label'),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-          child: Row(
-            children: [
-              Icon(icon, color: AppTheme.brand, size: 20),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTheme.bodyText.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.chevron_right,
-                color: AppTheme.secondaryText,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }

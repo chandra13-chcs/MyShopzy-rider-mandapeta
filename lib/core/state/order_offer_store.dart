@@ -11,29 +11,27 @@ enum PickupStatus {
   goingToPickup,
   reachedPickup,
   orderDetails,
-  pickupVerification,
   pickedUp,
   onTheWay,
 }
 
-enum DeliveryStatus { onTheWay, arriving, confirmingDelivery, delivered }
+enum DeliveryStatus { goingToCustomer, reachedCustomer, handOver, delivered }
 
 extension PickupStatusLabel on PickupStatus {
   String get label => switch (this) {
     PickupStatus.goingToPickup => 'Going to Pickup',
-    PickupStatus.reachedPickup => 'At Store',
-    PickupStatus.orderDetails => 'Order Verification',
-    PickupStatus.pickupVerification => 'Verify Pickup',
-    PickupStatus.pickedUp => 'Picked Up',
-    PickupStatus.onTheWay => 'On the Way',
+    PickupStatus.reachedPickup => 'Reached Store',
+    PickupStatus.orderDetails => 'Order Details',
+    PickupStatus.pickedUp => 'Pickup Confirmed',
+    PickupStatus.onTheWay => 'Going to Customer',
   };
 }
 
 extension DeliveryStatusLabel on DeliveryStatus {
   String get label => switch (this) {
-    DeliveryStatus.onTheWay => 'On the Way',
-    DeliveryStatus.arriving => 'Arriving',
-    DeliveryStatus.confirmingDelivery => 'Confirm Delivery',
+    DeliveryStatus.goingToCustomer => 'Going to Customer',
+    DeliveryStatus.reachedCustomer => 'Reached Customer',
+    DeliveryStatus.handOver => 'Hand Over',
     DeliveryStatus.delivered => 'Delivered',
   };
 }
@@ -48,7 +46,7 @@ class OrderOfferStore extends ChangeNotifier {
        pickupStatus = activeDelivery == null
            ? PickupStatus.goingToPickup
            : PickupStatus.onTheWay,
-       deliveryStatus = DeliveryStatus.onTheWay,
+       deliveryStatus = DeliveryStatus.goingToCustomer,
        secondsRemaining = offerDuration.inSeconds {
     availabilityStore.addListener(_handleAvailabilityChanged);
     _updateTimer();
@@ -113,7 +111,7 @@ class OrderOfferStore extends ChangeNotifier {
     status = OrderOfferStatus.accepted;
     activeDelivery = offer;
     pickupStatus = PickupStatus.goingToPickup;
-    deliveryStatus = DeliveryStatus.onTheWay;
+    deliveryStatus = DeliveryStatus.goingToCustomer;
     notifyListeners();
     return true;
   }
@@ -131,7 +129,7 @@ class OrderOfferStore extends ChangeNotifier {
   bool completeActiveDelivery(DemoDelivery delivery) {
     if (activeDelivery?.orderId != delivery.orderId ||
         pickupStatus != PickupStatus.onTheWay ||
-        deliveryStatus != DeliveryStatus.confirmingDelivery) {
+        deliveryStatus != DeliveryStatus.handOver) {
       return false;
     }
 
@@ -158,15 +156,9 @@ class OrderOfferStore extends ChangeNotifier {
     PickupStatus.orderDetails,
   );
 
-  bool beginPickupVerification(DemoDelivery delivery) => _advancePickup(
-    delivery,
-    PickupStatus.orderDetails,
-    PickupStatus.pickupVerification,
-  );
-
   bool verifyPickup(DemoDelivery delivery, String enteredDigits) {
     if (activeDelivery?.orderId != delivery.orderId ||
-        pickupStatus != PickupStatus.pickupVerification) {
+        pickupStatus != PickupStatus.orderDetails) {
       return false;
     }
 
@@ -191,21 +183,21 @@ class OrderOfferStore extends ChangeNotifier {
     }
 
     pickupStatus = PickupStatus.onTheWay;
-    deliveryStatus = DeliveryStatus.onTheWay;
+    deliveryStatus = DeliveryStatus.goingToCustomer;
     notifyListeners();
     return true;
   }
 
   bool arriveAtCustomer(DemoDelivery delivery) => _advanceDelivery(
     delivery,
-    DeliveryStatus.onTheWay,
-    DeliveryStatus.arriving,
+    DeliveryStatus.goingToCustomer,
+    DeliveryStatus.reachedCustomer,
   );
 
-  bool startDeliveryConfirmation(DemoDelivery delivery) => _advanceDelivery(
+  bool handOverOrder(DemoDelivery delivery) => _advanceDelivery(
     delivery,
-    DeliveryStatus.arriving,
-    DeliveryStatus.confirmingDelivery,
+    DeliveryStatus.reachedCustomer,
+    DeliveryStatus.handOver,
   );
 
   bool _advancePickup(

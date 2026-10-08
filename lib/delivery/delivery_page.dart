@@ -28,7 +28,8 @@ class DeliveryPage extends StatelessWidget {
         store.activeDelivery?.orderId == delivery.orderId
             ? store.pickupStatus
             : null,
-        store.activeDelivery?.orderId == delivery.orderId
+        store.activeDelivery?.orderId == delivery.orderId ||
+                store.deliveryStatus == DeliveryStatus.delivered
             ? store.deliveryStatus
             : null,
       ),
@@ -46,29 +47,8 @@ class DeliveryPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Delivery details')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          if (pickupStatus == PickupStatus.goingToPickup)
-            _buildPickupNavigationCard(context, store!)
-          else
-            Container(
-              height: 190,
-              decoration: BoxDecoration(
-                color: AppTheme.mapSurface,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.map_outlined, size: 48, color: AppTheme.success),
-                    SizedBox(height: 8),
-                    Text('Route preview', style: AppTheme.secondaryTextStyle),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 20),
           Text('Order ${delivery.orderId}', style: AppTheme.screenTitle),
           const SizedBox(height: 5),
           Text(
@@ -134,15 +114,18 @@ class DeliveryPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          if (!isActive)
-            FilledButton.icon(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Demo order accepted')),
+          if (!isActive && deliveryStatus == DeliveryStatus.delivered)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Delivery completed successfully.'),
               ),
-              icon: const Icon(Icons.check_rounded),
-              label: const Text('Accept delivery'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
+            )
+          else if (!isActive)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('This delivery is not active.'),
               ),
             )
           else
@@ -170,51 +153,10 @@ class DeliveryPage extends StatelessWidget {
           () => store.reachStore(delivery),
         );
       case PickupStatus.reachedPickup:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text("You're at the pickup location."),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _primaryAction(
-              'View Order Details',
-              () => store.openOrderDetails(delivery),
-            ),
-          ],
-        );
+        return _primaryAction('Order Details', () {
+          store.openOrderDetails(delivery);
+        });
       case PickupStatus.orderDetails:
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Order Details', style: AppTheme.cardTitle),
-                const SizedBox(height: 6),
-                const Text('Verify the order before pickup.'),
-                const SizedBox(height: 14),
-                Text('Order ${delivery.orderId}'),
-                const SizedBox(height: 6),
-                Text('Store: ${delivery.store}'),
-                const SizedBox(height: 6),
-                const Text('Items:'),
-                const SizedBox(height: 4),
-                const Text('2 × Chicken Biryani'),
-                const Text('1 × Coke'),
-                const SizedBox(height: 16),
-                _primaryAction(
-                  'Verify Pickup',
-                  () => store.beginPickupVerification(delivery),
-                ),
-              ],
-            ),
-          ),
-        );
-      case PickupStatus.pickupVerification:
         return _PickupVerificationForm(delivery: delivery, offerStore: store);
       case PickupStatus.pickedUp:
         return Column(
@@ -223,40 +165,12 @@ class DeliveryPage extends StatelessWidget {
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Pickup Verified'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Order ${delivery.orderId}'),
-                    const SizedBox(height: 6),
-                    Text('Store: ${delivery.store}'),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${delivery.store} → ${delivery.drop}',
-                      style: AppTheme.bodyText.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Delivery distance: '
-                      '${(delivery.deliveryDistanceKm ?? delivery.distanceKm).toStringAsFixed(1)} km',
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Payout: ₹${delivery.payout}'),
-                  ],
-                ),
+                child: Text('Pickup Confirmed'),
               ),
             ),
             const SizedBox(height: 12),
             _primaryAction(
-              'Continue to Customer',
+              'Start Delivery',
               () => store.continueToDelivery(delivery),
             ),
           ],
@@ -266,93 +180,35 @@ class DeliveryPage extends StatelessWidget {
     }
   }
 
-  Widget _buildPickupNavigationCard(
-    BuildContext context,
-    OrderOfferStore store,
-  ) {
-    return Card(
-      color: AppTheme.mapSurface,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.navigation_outlined, color: AppTheme.brand),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text('Pickup Location', style: AppTheme.cardTitle),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              delivery.pickup,
-              style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${delivery.pickupDistanceKm?.toStringAsFixed(1) ?? '1.8'} km away',
-              style: AppTheme.secondaryTextStyle,
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Navigation started')),
-                ),
-                icon: const Icon(Icons.directions_rounded),
-                label: const Text('Navigate to Pickup'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDeliveryActions(
     BuildContext context,
     OrderOfferStore store,
     DeliveryStatus status,
   ) {
     switch (status) {
-      case DeliveryStatus.onTheWay:
+      case DeliveryStatus.goingToCustomer:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildCustomerDeliverySummary(),
             const SizedBox(height: 12),
             _primaryAction(
-              'Arriving at Customer',
+              'Reached Customer',
               () => store.arriveAtCustomer(delivery),
             ),
           ],
         );
-      case DeliveryStatus.arriving:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildCustomerDeliverySummary(
-              message: 'You are arriving at the delivery location.',
-            ),
-            const SizedBox(height: 12),
-            _primaryAction(
-              'Start Delivery Confirmation',
-              () => store.startDeliveryConfirmation(delivery),
-            ),
-          ],
-        );
-      case DeliveryStatus.confirmingDelivery:
+      case DeliveryStatus.reachedCustomer:
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Confirm Delivery', style: AppTheme.cardTitle),
+                const Text(
+                  'Customer & Order Details',
+                  style: AppTheme.cardTitle,
+                ),
                 const SizedBox(height: 14),
                 Text('Order: ${delivery.orderId}'),
                 const SizedBox(height: 6),
@@ -362,9 +218,30 @@ class DeliveryPage extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text('Payout: ₹${delivery.payout}'),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => _completeDelivery(context, store),
-                  child: const Text('Confirm Delivery'),
+                _primaryAction(
+                  'Hand Over',
+                  () => store.handOverOrder(delivery),
+                ),
+              ],
+            ),
+          ),
+        );
+      case DeliveryStatus.handOver:
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Hand Over', style: AppTheme.cardTitle),
+                const SizedBox(height: 8),
+                Text(
+                  'Order ${delivery.orderId} is ready to be marked delivered.',
+                ),
+                const SizedBox(height: 16),
+                _primaryAction(
+                  'Mark Delivered',
+                  () => _completeDelivery(context, store),
                 ),
               ],
             ),
@@ -375,19 +252,10 @@ class DeliveryPage extends StatelessWidget {
     }
   }
 
-  Widget _buildCustomerDeliverySummary({String? message}) {
+  Widget _buildCustomerDeliverySummary() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (message != null) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(message),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -417,45 +285,12 @@ class DeliveryPage extends StatelessWidget {
     );
   }
 
-  Future<void> _completeDelivery(
-    BuildContext context,
-    OrderOfferStore store,
-  ) async {
+  void _completeDelivery(BuildContext context, OrderOfferStore store) {
     if (!store.completeActiveDelivery(delivery)) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delivered'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Delivery completed successfully.'),
-              const SizedBox(height: 12),
-              Text('Order ${delivery.orderId}'),
-              const SizedBox(height: 8),
-              Text('Customer: ${delivery.customer}'),
-              const SizedBox(height: 6),
-              Text('Drop: ${delivery.drop}'),
-              const SizedBox(height: 6),
-              Text('Payout: ₹${delivery.payout}'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
-
-    if (!context.mounted) return;
-    Navigator.of(context).pop(true);
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop(true);
+    }
   }
 
   Widget _primaryAction(String label, VoidCallback onPressed) {
@@ -516,9 +351,13 @@ class _PickupVerificationFormState extends State<_PickupVerificationForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Confirm Pickup', style: AppTheme.cardTitle),
+              const Text('Order Details', style: AppTheme.cardTitle),
               const SizedBox(height: 6),
-              const Text('Enter the last 4 digits of the Order ID.'),
+              Text('Store: ${widget.delivery.store}'),
+              const SizedBox(height: 6),
+              Text('Order: ${widget.delivery.orderId}'),
+              const SizedBox(height: 6),
+              const Text('Enter the last 4 digits to confirm pickup.'),
               const SizedBox(height: 14),
               TextFormField(
                 controller: _digitsController,
