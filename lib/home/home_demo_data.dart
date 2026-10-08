@@ -4,6 +4,7 @@ class HomeDemoData {
   const HomeDemoData({
     this.greeting = 'Good morning,',
     this.riderName = 'Ravi Kumar',
+    this.riderId = 'RDR-1001',
     this.deliveriesCompleted = 5,
     this.todayEarnings = 650,
     this.distanceKm = 18.6,
@@ -18,6 +19,7 @@ class HomeDemoData {
 
   final String greeting;
   final String riderName;
+  final String riderId;
   final int deliveriesCompleted;
   final int todayEarnings;
   final double distanceKm;

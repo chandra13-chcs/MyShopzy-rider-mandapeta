@@ -122,7 +122,6 @@ class OrderOfferPage extends StatelessWidget {
                   icon: Icons.location_on_outlined,
                   label: 'Drop',
                   value: delivery.drop,
-                  distance: '${delivery.deliveryDistanceKm} km',
                 ),
                 const SizedBox(height: 18),
                 const Divider(),
@@ -131,6 +130,18 @@ class OrderOfferPage extends StatelessWidget {
                   spacing: 18,
                   runSpacing: 12,
                   children: [
+                    _OfferMetric(
+                      icon: Icons.route_outlined,
+                      label: 'Pickup distance',
+                      value:
+                          '${delivery.pickupDistanceKm?.toStringAsFixed(1) ?? '0.0'} km',
+                    ),
+                    _OfferMetric(
+                      icon: Icons.route_outlined,
+                      label: 'Delivery distance',
+                      value:
+                          '${delivery.effectiveDeliveryDistance.toStringAsFixed(1)} km',
+                    ),
                     _OfferMetric(
                       icon: Icons.route_outlined,
                       label: 'Total distance',
@@ -150,24 +161,34 @@ class OrderOfferPage extends StatelessWidget {
                     color: AppTheme.successSoft,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.payments_outlined,
-                        color: AppTheme.success,
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Estimated payout',
-                          style: AppTheme.secondaryTextStyle,
-                        ),
-                      ),
                       Text(
-                        '₹${delivery.payout}',
-                        style: AppTheme.sectionTitle.copyWith(
-                          color: AppTheme.success,
-                        ),
+                        'Payout breakdown: ${delivery.payoutBreakdown}',
+                        style: AppTheme.secondaryTextStyle,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.payments_outlined,
+                            color: AppTheme.success,
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Estimated payout',
+                              style: AppTheme.secondaryTextStyle,
+                            ),
+                          ),
+                          Text(
+                            '₹${delivery.calculatedPayout}',
+                            style: AppTheme.sectionTitle.copyWith(
+                              color: AppTheme.success,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

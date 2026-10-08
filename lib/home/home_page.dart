@@ -114,6 +114,11 @@ class _HomePageState extends State<HomePage> {
                 overflow: TextOverflow.ellipsis,
                 style: AppTheme.greetingTitle,
               ),
+              const SizedBox(height: 2),
+              Text(
+                'Rider ID: ${widget.demoData.riderId}',
+                style: AppTheme.secondaryTextStyle,
+              ),
             ],
           ),
         ),
@@ -249,16 +254,19 @@ class _HomePageState extends State<HomePage> {
             _OfferSummaryRow(label: 'Drop', value: offer.drop),
             _OfferSummaryRow(
               label: 'Delivery distance',
-              value:
-                  '${offer.deliveryDistanceKm?.toStringAsFixed(1) ?? '2.4'} km',
+              value: '${offer.effectiveDeliveryDistance.toStringAsFixed(1)} km',
             ),
             _OfferSummaryRow(
               label: 'Total distance',
               value: '${offer.distanceKm.toStringAsFixed(1)} km',
             ),
             _OfferSummaryRow(
+              label: 'Payout breakdown',
+              value: offer.payoutBreakdown,
+            ),
+            _OfferSummaryRow(
               label: 'Estimated payout',
-              value: '₹${offer.payout}',
+              value: '₹${offer.calculatedPayout}',
             ),
             _OfferSummaryRow(label: 'Vehicle', value: offer.vehicle),
             const SizedBox(height: 14),
