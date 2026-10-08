@@ -6,11 +6,15 @@ import 'package:myshopzy_rider/core/state/order_offer_store.dart';
 import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
 import 'package:myshopzy_rider/delivery/delivery_page.dart';
+import 'package:myshopzy_rider/earnings/earnings_page.dart';
+import 'package:myshopzy_rider/history/history_page.dart';
+import 'package:myshopzy_rider/help_support/help_support_page.dart';
 import 'package:myshopzy_rider/home/home_demo_data.dart';
 import 'package:myshopzy_rider/home/home_page.dart';
 import 'package:myshopzy_rider/orders/order_offer_page.dart';
 import 'package:myshopzy_rider/orders/orders_page.dart';
 import 'package:myshopzy_rider/profile/profile_page.dart';
+import 'package:myshopzy_rider/settings/settings_page.dart';
 
 void main() {
   testWidgets('home dashboard renders the local rider summary', (tester) async {
@@ -151,7 +155,7 @@ void main() {
 
     await tester.tap(find.text('Earnings').last);
     await tester.pumpAndSettle();
-    expect(find.text('Earnings breakdown'), findsOneWidget);
+    expect(find.text("TODAY'S EARNINGS"), findsOneWidget);
 
     await tester.tap(find.text('Profile').last);
     await tester.pumpAndSettle();
@@ -1264,7 +1268,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('profile-settings')));
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Order alerts'), findsOneWidget);
+    expect(find.text('Order Alerts'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
@@ -1388,6 +1392,321 @@ void main() {
     await tester.tap(find.text('Home').last);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('earnings dashboard renders summary and recent deliveries', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: EarningsPage()));
+
+    expect(find.text('₹650'), findsNWidgets(2));
+    expect(find.text('₹3,850'), findsNWidgets(2));
+    expect(find.text('₹18,420'), findsNWidgets(2));
+    expect(find.text('₹1,24,800'), findsOneWidget);
+    expect(find.text('1,220'), findsOneWidget);
+    expect(find.text('₹102'), findsOneWidget);
+    expect(find.text('Earnings breakdown'), findsOneWidget);
+    expect(find.text('742 km'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('#MS-2051'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('Fresh Basket'), findsWidgets);
+    expect(find.text('Today • 2:40 PM'), findsOneWidget);
+    expect(find.text('4.2 km'), findsOneWidget);
+  });
+
+  testWidgets('history status and time filters filter local demo records', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: HistoryPage()));
+
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('#MS-2042'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('history-status-completed')));
+    await tester.pumpAndSettle();
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('#MS-2042'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('history-period-today')));
+    await tester.pumpAndSettle();
+    expect(find.text('#MS-2040'), findsNothing);
+    expect(find.text('#MS-2051'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('history-period-thisWeek')));
+    await tester.pumpAndSettle();
+    expect(find.text('#MS-2040'), findsOneWidget);
+    expect(find.text('#MS-2038'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('history-period-thisMonth')));
+    await tester.pumpAndSettle();
+    expect(find.text('#MS-2038'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('history-status-cancelled')));
+    await tester.pumpAndSettle();
+    expect(find.text('#MS-2042'), findsOneWidget);
+    expect(find.text('#MS-2036'), findsOneWidget);
+    expect(find.text('#MS-2051'), findsNothing);
+  });
+
+  testWidgets('history opens completed and cancelled detail records', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: HistoryPage()));
+
+    await tester.tap(find.byKey(const ValueKey('history-record-#MS-2051')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery details'), findsOneWidget);
+    expect(find.text('Ananya Reddy'), findsOneWidget);
+    expect(find.text('12 Market Road'), findsOneWidget);
+    expect(find.text('Lakshmi Nagar'), findsOneWidget);
+    expect(find.text('Delivered'), findsWidgets);
+    expect(find.text('₹95'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('history-status-cancelled')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('history-record-#MS-2042')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelled'), findsWidgets);
+    expect(find.text('₹0'), findsOneWidget);
+  });
+
+  testWidgets('earnings history navigation remains available', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: EarningsPage()));
+
+    await tester.tap(find.byTooltip('Delivery history'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delivery history'), findsOneWidget);
+    expect(find.text('Completed Deliveries'), findsOneWidget);
+  });
+
+  testWidgets('earnings and history fit common phone viewports', (
+    tester,
+  ) async {
+    for (final viewport in [const Size(360, 800), const Size(390, 844)]) {
+      tester.view.physicalSize = viewport;
+      tester.view.devicePixelRatio = 1;
+
+      await tester.pumpWidget(const MaterialApp(home: EarningsPage()));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const MaterialApp(home: HistoryPage()));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox());
+    }
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  });
+
+  testWidgets('settings shows local preferences and demo app information', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+
+    expect(find.text('APP PREFERENCES'), findsOneWidget);
+    expect(find.text('Order Alerts'), findsOneWidget);
+    expect(find.text('Sound'), findsOneWidget);
+    expect(find.text('Vibration'), findsOneWidget);
+    expect(find.text('Dark Mode'), findsOneWidget);
+    expect(find.text('MyShopzy Rider'), findsOneWidget);
+    expect(find.text('1.0.0'), findsOneWidget);
+    expect(find.text('Demo'), findsOneWidget);
+    expect(find.text('Not Connected'), findsOneWidget);
+  });
+
+  testWidgets('sound, vibration, and dark mode preferences stay local', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    final brightnessBefore = Theme.of(tester.element(find.byType(SettingsPage)))
+        .brightness;
+
+    for (final preference in ['sound', 'vibration', 'dark-mode']) {
+      final tile = find.byKey(ValueKey('settings-$preference'));
+      final settingSwitch = find.descendant(
+        of: tile,
+        matching: find.byType(Switch),
+      );
+      expect(
+        tester.widget<Switch>(settingSwitch).value,
+        preference != 'dark-mode',
+      );
+      await tester.tap(settingSwitch);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Switch>(settingSwitch).value,
+        preference == 'dark-mode',
+      );
+      expect(
+        Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+        brightnessBefore,
+      );
+    }
+  });
+
+  testWidgets('settings legal information opens local dialogs', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+
+    final privacy = find.byKey(const ValueKey('settings-privacy'));
+    await tester.scrollUntilVisible(
+      privacy,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(privacy);
+    await tester.pumpAndSettle();
+    expect(find.text('Privacy Policy'), findsWidgets);
+    expect(
+      find.textContaining('demo screen provides sample information'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    final terms = find.byKey(const ValueKey('settings-terms'));
+    await tester.scrollUntilVisible(
+      terms,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(terms);
+    await tester.pumpAndSettle();
+    expect(find.text('Terms & Conditions'), findsWidgets);
+    expect(find.textContaining('placeholder information'), findsOneWidget);
+  });
+
+  testWidgets('help page contains FAQs and quick help expands and collapses', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: HelpSupportPage()));
+
+    expect(find.text('Quick Help'), findsOneWidget);
+    expect(find.text('FAQ'), findsOneWidget);
+    expect(find.text('Frequently asked'), findsOneWidget);
+    final acceptFaq = find.text('How do I accept an order?');
+    await tester.scrollUntilVisible(
+      acceptFaq,
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(acceptFaq);
+    await tester.pumpAndSettle();
+    await tester.tap(acceptFaq);
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Open the available demo offer'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(acceptFaq);
+    await tester.pumpAndSettle();
+    await tester.tap(acceptFaq);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Open the available demo offer'), findsNothing);
+
+    expect(
+      find.text('What should I do if the customer is unavailable?'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('quick help opens its matching expandable FAQ', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HelpSupportPage()));
+
+    final pickupQuickHelp = find.text('How pickup works');
+    await tester.scrollUntilVisible(
+      pickupQuickHelp,
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(pickupQuickHelp);
+    await tester.pumpAndSettle();
+    await tester.tap(pickupQuickHelp);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('last four digits'), findsOneWidget);
+  });
+
+  testWidgets('help contact actions show demo dialogs only', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HelpSupportPage()));
+
+    for (final action in [
+      ('help-contact-center', 'Help Center'),
+      ('help-report-issue', 'Report an Issue'),
+      ('help-emergency', 'Emergency Help'),
+    ]) {
+      final finder = find.byKey(ValueKey(action.$1));
+      await tester.scrollUntilVisible(
+        finder,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+      expect(find.text(action.$2), findsWidgets);
+      if (action.$1 == 'help-emergency') {
+        expect(
+          find.textContaining(
+            'For immediate danger, contact local emergency services.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('does not place calls'), findsOneWidget);
+      } else {
+        expect(
+          find.textContaining(
+            action.$1 == 'help-contact-center'
+                ? 'Support services are not connected.'
+                : 'No ticket or message has been sent.',
+          ),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(
+        find.text(action.$1 == 'help-emergency' ? 'Understood' : 'Close'),
+      );
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('settings and help layouts fit common phone viewports', (
+    tester,
+  ) async {
+    for (final viewport in [const Size(360, 800), const Size(390, 844)]) {
+      tester.view.physicalSize = viewport;
+      tester.view.devicePixelRatio = 1;
+
+      await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Terms & Conditions'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const MaterialApp(home: HelpSupportPage()));
+      expect(tester.takeException(), isNull);
+      final emergency = find.byKey(const ValueKey('help-emergency'));
+      await tester.scrollUntilVisible(
+        emergency,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox());
+    }
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
   });
 }
 
