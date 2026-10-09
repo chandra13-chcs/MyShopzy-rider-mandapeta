@@ -177,7 +177,7 @@ class DeliveryHistoryDetailsPage extends StatelessWidget {
                               : AppTheme.error,
                           backgroundColor: isCompleted
                               ? AppTheme.successSoft
-                              : const Color(0xFFFFE8E6),
+                              : AppTheme.errorSoft,
                         ),
                       ],
                     ),
@@ -288,7 +288,7 @@ class _HistoryRecordCard extends StatelessWidget {
               CircleAvatar(
                 backgroundColor: isCompleted
                     ? AppTheme.successSoft
-                    : const Color(0xFFFFE8E6),
+                    : AppTheme.errorSoft,
                 child: Icon(
                   isCompleted ? Icons.check_rounded : Icons.close_rounded,
                   color: isCompleted ? AppTheme.success : AppTheme.error,
@@ -323,7 +323,7 @@ class _HistoryRecordCard extends StatelessWidget {
                     color: isCompleted ? AppTheme.success : AppTheme.error,
                     backgroundColor: isCompleted
                         ? AppTheme.successSoft
-                        : const Color(0xFFFFE8E6),
+                        : AppTheme.errorSoft,
                   ),
                   const SizedBox(height: 8),
                   Text(

@@ -31,7 +31,7 @@ class EarningsPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Card(
-              color: AppTheme.primaryText,
+              color: AppTheme.darkGreen,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(

@@ -86,16 +86,22 @@ class _HomePageState extends State<HomePage> {
     return Row(
       children: [
         Container(
-          width: 48,
+          width: 76,
           height: 48,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.brand.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
+            color: AppTheme.lightGreenSurface,
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: const Icon(
-            Icons.delivery_dining,
-            color: AppTheme.brand,
-            size: 30,
+          child: const Text(
+            'MyShopzy',
+            maxLines: 1,
+            style: TextStyle(
+              color: AppTheme.darkGreen,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
           ),
         ),
         const SizedBox(width: 12),

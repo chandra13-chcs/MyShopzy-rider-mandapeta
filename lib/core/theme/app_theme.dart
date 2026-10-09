@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const brand = Color(0xFFE85D2A);
-  static const background = Color(0xFFF6F7F9);
-  static const surface = Color(0xFFFFFFFF);
-  static const primaryText = Color(0xFF202124);
-  static const secondaryText = Color(0xFF74777C);
-  static const success = Color(0xFF168A56);
+  static const brand = Color(0xFF16834A);
+  static const darkGreen = Color(0xFF004225);
+  static const brandYellow = Color(0xFFFFD51E);
+  static const background = Color(0xFFF7F8F5);
+  static const surface = Color(0xFFFCFDFC);
+  static const lightGreenSurface = Color(0xFFEFF8F4);
+  static const primaryText = Color(0xFF202321);
+  static const secondaryText = Color(0xFF777C79);
+  static const success = brand;
   static const warning = Color(0xFFB7791F);
   static const error = Color(0xFFB42318);
-  static const divider = Color(0xFFE6E8EB);
-  static const brandSoft = Color(0xFFFFE8DE);
-  static const successSoft = Color(0xFFE9F5EF);
-  static const mapSurface = Color(0xFFE8F0E9);
+  static const errorSoft = Color(0xFFFFE8E6);
+  static const divider = Color(0xFFE2EAE5);
+  static const brandSoft = lightGreenSurface;
+  static const successSoft = lightGreenSurface;
+  static const mapSurface = lightGreenSurface;
   static const onDarkSurface = Color(0xB3FFFFFF);
   static const darkDivider = Color(0x33FFFFFF);
-  static const bonus = Color(0xFF8BE0B3);
+  static const bonus = brandYellow;
 
   static const screenTitle = TextStyle(
     color: primaryText,
@@ -53,8 +57,8 @@ abstract final class AppTheme {
       seedColor: brand,
       primary: brand,
       onPrimary: surface,
-      secondary: success,
-      onSecondary: surface,
+      secondary: brandYellow,
+      onSecondary: darkGreen,
       error: error,
       onError: surface,
       surface: surface,
@@ -78,13 +82,18 @@ abstract final class AppTheme {
         labelMedium: smallStatus,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: background,
-        foregroundColor: primaryText,
+        backgroundColor: brand,
+        foregroundColor: surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: screenTitle,
-        iconTheme: IconThemeData(color: primaryText),
+        titleTextStyle: TextStyle(
+          color: surface,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        iconTheme: IconThemeData(color: surface),
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
         color: surface,
@@ -99,6 +108,20 @@ abstract final class AppTheme {
         color: divider,
         thickness: 1,
         space: 1,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface,
+        hintStyle: const TextStyle(color: secondaryText),
+        labelStyle: const TextStyle(color: secondaryText),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: brand, width: 1.5),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -142,24 +165,24 @@ abstract final class AppTheme {
         }),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
+        backgroundColor: darkGreen,
         elevation: 0,
         height: 72,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        indicatorColor: brand.withValues(alpha: 0.12),
+        indicatorColor: brandYellow.withValues(alpha: 0.18),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           return IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? brand
-                : secondaryText,
+                ? brandYellow
+                : surface,
             size: 22,
           );
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           return TextStyle(
             color: states.contains(WidgetState.selected)
-                ? brand
-                : secondaryText,
+                ? brandYellow
+                : surface,
             fontSize: 12,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w700

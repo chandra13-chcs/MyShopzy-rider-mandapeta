@@ -37,7 +37,7 @@ class DemoDelivery {
     pickup: '12 Market Road',
     drop: 'Lakshmi Nagar',
     distanceKm: 4.2,
-    payout: 95,
+    payout: 40,
     status: 'New Offer',
     pickupDistanceKm: 1.8,
     deliveryDistanceKm: 2.4,

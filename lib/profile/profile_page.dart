@@ -18,15 +18,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   RiderProfileDemoData _profile = const RiderProfileDemoData();
-  int? _bookedGigIndex;
-
-  static const List<_GigSlot> _gigSlots = [
-    _GigSlot(label: '7:00–10:00', status: 'Available'),
-    _GigSlot(label: '10:00–12:00', status: 'Available'),
-    _GigSlot(label: '12:00–3:00', status: 'Available'),
-    _GigSlot(label: '3:00–7:00', status: 'Available'),
-    _GigSlot(label: '7:00–11:00', status: 'Available'),
-  ];
 
   Future<void> _showEditProfile() async {
     final updatedProfile = await showDialog<RiderProfileDemoData>(
@@ -89,10 +80,6 @@ class _ProfilePageState extends State<ProfilePage> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _buildProfileHeader(),
-            const SizedBox(height: 18),
-            const _SectionHeading(title: 'My Gigs'),
-            const SizedBox(height: 10),
-            _buildMyGigs(),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Rider performance'),
             const SizedBox(height: 10),
@@ -204,87 +191,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMyGigs() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _bookedGigIndex == null ? 'Book a gig slot' : 'Booked gig',
-                    style: AppTheme.cardTitle,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.brandSoft,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _bookedGigIndex == null ? 'Open slots' : 'Booked',
-                    style: const TextStyle(
-                      color: AppTheme.brand,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...List.generate(_gigSlots.length, (index) {
-              final slot = _gigSlots[index];
-              final isBooked = _bookedGigIndex == index;
-              final isLocked = _bookedGigIndex != null && !isBooked;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(slot.label, style: AppTheme.cardTitle),
-                          const SizedBox(height: 4),
-                          Text(
-                            isBooked ? 'Booked for this slot' : slot.status,
-                            style: AppTheme.secondaryTextStyle,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    FilledButton(
-                      onPressed: isLocked
-                          ? null
-                          : () => setState(() {
-                              _bookedGigIndex = index;
-                            }),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      child: Text(isBooked ? 'Booked' : 'Book gig'),
-                    ),
-                  ],
-                ),
-              );
-            }),
           ],
         ),
       ),
@@ -441,7 +347,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           ListTile(
             leading: const CircleAvatar(
-              backgroundColor: Color(0xFFFFE8E6),
+              backgroundColor: AppTheme.errorSoft,
               child: Icon(Icons.sos_rounded, color: AppTheme.error),
             ),
             title: const Text('SOS', style: AppTheme.cardTitle),
@@ -693,13 +599,6 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
 
   String? _requiredValidator(String? value) =>
       value == null || value.trim().isEmpty ? 'Required' : null;
-}
-
-class _GigSlot {
-  const _GigSlot({required this.label, required this.status});
-
-  final String label;
-  final String status;
 }
 
 class _SectionHeading extends StatelessWidget {

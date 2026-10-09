@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myshopzy_rider/app/rider_app.dart';
 import 'package:myshopzy_rider/core/state/availability_store.dart';
+import 'package:myshopzy_rider/core/state/new_order_alert.dart';
 import 'package:myshopzy_rider/core/state/order_offer_store.dart';
 import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
@@ -11,6 +12,7 @@ import 'package:myshopzy_rider/history/history_page.dart';
 import 'package:myshopzy_rider/help_support/help_support_page.dart';
 import 'package:myshopzy_rider/home/home_demo_data.dart';
 import 'package:myshopzy_rider/home/home_page.dart';
+import 'package:myshopzy_rider/orders/incoming_order_offer_dialog.dart';
 import 'package:myshopzy_rider/orders/order_offer_page.dart';
 import 'package:myshopzy_rider/orders/orders_page.dart';
 import 'package:myshopzy_rider/profile/profile_page.dart';
@@ -21,6 +23,7 @@ void main() {
     await tester.pumpWidget(const RiderApp());
 
     expect(find.text('Good morning,'), findsOneWidget);
+    expect(find.text('MyShopzy'), findsOneWidget);
     expect(find.text('Ravi Kumar'), findsOneWidget);
     expect(find.text("You're online"), findsOneWidget);
     expect(
@@ -111,6 +114,50 @@ void main() {
     expect(find.text('Lakshmi Nagar, Mandapeta'), findsOneWidget);
   });
 
+  testWidgets('eligible new offer opens popup and accepts into delivery flow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const RiderApp());
+
+    await _scrollHomeTo(tester, find.text('Continue Delivery'));
+    await tester.tap(find.text('Continue Delivery'));
+    await tester.pumpAndSettle();
+    final reachedCustomerButton = find.widgetWithText(
+      FilledButton,
+      'Reached Customer',
+    );
+    await tester.dragFrom(const Offset(180, 700), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    await tester.tap(reachedCustomerButton);
+    await tester.pumpAndSettle();
+    final handOverButton = find.widgetWithText(FilledButton, 'Hand Over');
+    await tester.dragFrom(const Offset(180, 700), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(handOverButton);
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(180, 700), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark Delivered'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Orders').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Check for demo offer'));
+    await tester.pumpAndSettle();
+    expect(find.text('NEW ORDER'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('NEW ORDER'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('incoming-order-accept')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery details'), findsOneWidget);
+    expect(find.text('Order #MS-2051'), findsOneWidget);
+  });
+
   testWidgets('active delivery remains available when rider goes offline', (
     tester,
   ) async {
@@ -141,9 +188,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("TODAY'S EARNINGS"), findsOneWidget);
 
+    await tester.tap(find.text('Gigs').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Book a gig slot'), findsOneWidget);
+
     await tester.tap(find.text('Profile').last);
     await tester.pumpAndSettle();
     expect(find.text('Rider ID: RDR-1001'), findsOneWidget);
+    expect(find.text('My Gigs'), findsNothing);
 
     await tester.tap(find.text('Home').last);
     await tester.pumpAndSettle();
@@ -154,6 +206,160 @@ void main() {
     await tester.tap(find.text('Orders').last);
     await tester.pumpAndSettle();
     expect(find.text("You're currently delivering"), findsOneWidget);
+  });
+
+  testWidgets('Gigs navigation permits booking multiple available slots', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const RiderApp());
+    await tester.tap(find.text('Gigs').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('7:00–10:00'), findsOneWidget);
+    expect(find.text('10:00–12:00'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Gig booked for 7:00–10:00.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('gig-book-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 booked'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-2')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home header keeps brand wordmark beside the dynamic rider', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomePage(
+            availabilityStore: availabilityStore,
+            offerStore: offerStore,
+            demoData: HomeDemoData(riderName: 'Mina Rao', activeDelivery: null),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('MyShopzy'), findsOneWidget);
+    expect(find.text('Mina Rao'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  testWidgets(
+    'incoming offer popup displays order data and accepts via store',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final availabilityStore = AvailabilityStore();
+      final offerStore = OrderOfferStore(
+        availabilityStore: availabilityStore,
+        activeDelivery: null,
+      );
+      await _pumpIncomingOfferDialog(tester, offerStore);
+
+      expect(find.text('NEW ORDER'), findsOneWidget);
+      expect(find.text('#MS-2051'), findsOneWidget);
+      expect(find.text('₹40'), findsOneWidget);
+      expect(find.text('Fresh Basket'), findsOneWidget);
+      expect(find.text('12 Market Road'), findsWidgets);
+      expect(find.text('Lakshmi Nagar'), findsWidgets);
+      expect(find.text('Pickup · 1.8 km'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('incoming-order-accept')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('incoming-order-accept')));
+      await tester.pumpAndSettle();
+      expect(offerStore.status, OrderOfferStatus.accepted);
+      expect(offerStore.activeDelivery?.orderId, '#MS-2051');
+      await tester.pumpWidget(const SizedBox());
+      offerStore.dispose();
+      availabilityStore.dispose();
+    },
+  );
+
+  testWidgets('incoming offer popup rejects through the existing store', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+    await _pumpIncomingOfferDialog(tester, offerStore);
+
+    await tester.tap(find.byKey(const ValueKey('incoming-order-reject')));
+    await tester.pumpAndSettle();
+    expect(offerStore.status, OrderOfferStatus.rejected);
+    expect(offerStore.activeDelivery, isNull);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
+
+  test('incoming alert repeats while pending and stops immediately', () async {
+    var playCount = 0;
+    var stopCount = 0;
+    var activePlayers = 0;
+    var maxActivePlayers = 0;
+    final alert = NewOrderAlert(
+      interval: const Duration(milliseconds: 10),
+      stopSound: () async {
+        stopCount++;
+      },
+      playSound: () async {
+        playCount++;
+        activePlayers++;
+        if (activePlayers > maxActivePlayers) {
+          maxActivePlayers = activePlayers;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        activePlayers--;
+      },
+    );
+
+    alert.start('#MS-2051');
+    await Future<void>.delayed(const Duration(milliseconds: 65));
+    expect(playCount, greaterThan(1));
+    expect(maxActivePlayers, 1);
+    await alert.stop();
+    expect(stopCount, 1);
+    final countAfterStop = playCount;
+    await Future<void>.delayed(const Duration(milliseconds: 35));
+    expect(playCount, countAfterStop);
+    await alert.dispose();
   });
 
   testWidgets('home omits duplicate shortcuts and recent delivery', (
@@ -218,7 +424,8 @@ void main() {
     expect(find.text('1.8 km away'), findsOneWidget);
     expect(find.text('2.4 km'), findsOneWidget);
     expect(find.text('4.2 km'), findsOneWidget);
-    expect(find.text('₹95'), findsOneWidget);
+    expect(find.text('Payout breakdown: Base: ₹40'), findsOneWidget);
+    expect(find.text('₹40'), findsOneWidget);
     expect(find.text('Bike'), findsOneWidget);
     expect(find.text('ACCEPT'), findsOneWidget);
     expect(find.text('REJECT'), findsOneWidget);
@@ -230,6 +437,8 @@ void main() {
   ) async {
     final harness = await _pumpOfferPage(tester, activeDelivery: null);
 
+    await tester.ensureVisible(find.text('ACCEPT'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('ACCEPT'));
     await tester.pumpAndSettle();
 
@@ -248,7 +457,7 @@ void main() {
     expect(find.text('Reached Store'), findsOneWidget);
     expect(find.text('1.8 km away'), findsOneWidget);
     expect(find.text('Order #MS-2051'), findsOneWidget);
-    expect(find.text('₹ 95'), findsOneWidget);
+    expect(find.text('₹ 40'), findsOneWidget);
     await _disposeOfferHarness(tester, harness);
   });
 
@@ -574,6 +783,8 @@ void main() {
   ) async {
     final harness = await _pumpOfferPage(tester, activeDelivery: null);
 
+    await tester.ensureVisible(find.text('REJECT'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('REJECT'));
     await tester.pumpAndSettle();
 
@@ -893,7 +1104,8 @@ void main() {
     expect(find.text('1.8 km'), findsOneWidget);
     expect(find.text('2.4 km'), findsOneWidget);
     expect(find.text('4.2 km'), findsOneWidget);
-    expect(find.text('₹95'), findsOneWidget);
+    expect(find.text('Base: ₹40'), findsOneWidget);
+    expect(find.text('₹40'), findsOneWidget);
     expect(find.text('Bike'), findsOneWidget);
     expect(find.text('Accept'), findsOneWidget);
     expect(find.text('Reject'), findsOneWidget);
@@ -1021,6 +1233,11 @@ void main() {
     expect(find.text('+91 98765 43210'), findsWidgets);
     expect(find.text('ACTIVE'), findsOneWidget);
     expect(find.text('VERIFIED'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('4.8 ⭐'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('4.8 ⭐'), findsOneWidget);
     expect(find.text('1,248'), findsOneWidget);
     expect(find.text('1,220'), findsOneWidget);
@@ -1630,6 +1847,34 @@ void _advancePickupToPickedUp(OrderOfferStore offerStore) {
       !offerStore.verifyPickup(delivery, '2051')) {
     throw StateError('Could not advance pickup to verified state');
   }
+}
+
+Future<void> _pumpIncomingOfferDialog(
+  WidgetTester tester,
+  OrderOfferStore offerStore,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) =>
+                    IncomingOrderOfferDialog(offerStore: offerStore),
+              ),
+              child: const Text('Open incoming offer'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open incoming offer'));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _scrollHomeTo(WidgetTester tester, Finder target) async {

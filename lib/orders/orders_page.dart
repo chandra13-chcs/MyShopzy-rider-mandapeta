@@ -163,7 +163,7 @@ class OrdersPage extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '₹${delivery.payout}',
+                  '₹${delivery.calculatedPayout}',
                   style: AppTheme.bodyText.copyWith(
                     color: AppTheme.success,
                     fontWeight: FontWeight.w700,

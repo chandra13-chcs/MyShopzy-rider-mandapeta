@@ -85,7 +85,7 @@ class OrderOfferPage extends StatelessWidget {
                           ? AppTheme.error
                           : AppTheme.brand,
                       backgroundColor: offerStore.secondsRemaining <= 5
-                          ? AppTheme.brandSoft
+                          ? AppTheme.errorSoft
                           : AppTheme.brandSoft,
                     ),
                   ],
