@@ -5,23 +5,25 @@ import 'package:flutter/foundation.dart';
 
 class NewOrderAlert {
   NewOrderAlert({
-    this.interval = const Duration(seconds: 6),
+    this.alertDuration = const Duration(seconds: 30),
     Future<void> Function()? playSound,
     this.stopSound,
   }) : _player = playSound == null ? AudioPlayer() : null,
        _playSound = playSound {
     _completionSubscription = _player?.onPlayerComplete.listen((_) {
-      if (_orderId != null) _isPlaying = false;
+      final orderId = _orderId;
+      if (orderId != null) _playbackCompleted(orderId, _generation);
     });
   }
 
   static const _asset = 'sounds/rider_alert.mpeg';
 
-  final Duration interval;
+  final Duration alertDuration;
   final AudioPlayer? _player;
   final Future<void> Function()? _playSound;
   final Future<void> Function()? stopSound;
-  Timer? _timer;
+  final Set<String> _alertedOrderIds = {};
+  Timer? _windowTimer;
   String? _orderId;
   bool _isPlaying = false;
   int _generation = 0;
@@ -29,20 +31,21 @@ class NewOrderAlert {
   late final StreamSubscription<void>? _completionSubscription;
 
   void start(String orderId) {
-    if (_orderId == orderId && _timer != null) return;
+    if (_alertedOrderIds.contains(orderId)) return;
 
     final shouldStopPrevious = _orderId != null || _isPlaying;
     final generation = ++_generation;
-    _timer?.cancel();
+    _alertedOrderIds.add(orderId);
+    _windowTimer?.cancel();
     _orderId = orderId;
-    _isPlaying = true;
-    _timer = Timer.periodic(interval, (_) {
-      unawaited(_playFor(orderId, generation));
+    _isPlaying = false;
+    _windowTimer = Timer(alertDuration, () {
+      unawaited(stop());
     });
+
     if (shouldStopPrevious) {
       unawaited(_stopThenPlay(orderId, generation));
     } else {
-      _isPlaying = false;
       unawaited(_playFor(orderId, generation));
     }
   }
@@ -50,7 +53,6 @@ class NewOrderAlert {
   Future<void> _stopThenPlay(String orderId, int generation) async {
     await _stopPlayback();
     if (generation != _generation || _orderId != orderId) return;
-    _isPlaying = false;
     await _playFor(orderId, generation);
   }
 
@@ -64,7 +66,7 @@ class NewOrderAlert {
       final playSound = _playSound;
       if (playSound != null) {
         await playSound();
-        if (generation == _generation) _isPlaying = false;
+        _playbackCompleted(orderId, generation);
         return;
       }
 
@@ -78,6 +80,15 @@ class NewOrderAlert {
       debugPrint('Unable to play the incoming-order alert: $error');
       if (generation == _generation) _isPlaying = false;
     }
+  }
+
+  void _playbackCompleted(String orderId, int generation) {
+    if (generation != _generation || _orderId != orderId || !_isPlaying) {
+      return;
+    }
+
+    _isPlaying = false;
+    unawaited(_playFor(orderId, generation));
   }
 
   Future<void> _stopPlayback() async {
@@ -105,10 +116,10 @@ class NewOrderAlert {
   }
 
   Future<void> stop() async {
-    final wasActive = _timer != null || _orderId != null || _isPlaying;
+    final wasActive = _windowTimer != null || _orderId != null || _isPlaying;
     ++_generation;
-    _timer?.cancel();
-    _timer = null;
+    _windowTimer?.cancel();
+    _windowTimer = null;
     _orderId = null;
     _isPlaying = false;
     if (wasActive) await _stopPlayback();

@@ -329,13 +329,14 @@ void main() {
     availabilityStore.dispose();
   });
 
-  test('incoming alert repeats while pending and stops immediately', () async {
+  testWidgets('incoming alert repeats until its 30-second window ends', (
+    tester,
+  ) async {
     var playCount = 0;
     var stopCount = 0;
     var activePlayers = 0;
     var maxActivePlayers = 0;
     final alert = NewOrderAlert(
-      interval: const Duration(milliseconds: 10),
       stopSound: () async {
         stopCount++;
       },
@@ -345,21 +346,66 @@ void main() {
         if (activePlayers > maxActivePlayers) {
           maxActivePlayers = activePlayers;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(seconds: 8));
         activePlayers--;
       },
     );
 
     alert.start('#MS-2051');
-    await Future<void>.delayed(const Duration(milliseconds: 65));
-    expect(playCount, greaterThan(1));
+    await tester.pump();
+    expect(playCount, 1);
+
+    await tester.pump(const Duration(seconds: 8));
+    expect(playCount, 2);
+    await tester.pump(const Duration(seconds: 8));
+    expect(playCount, 3);
+    await tester.pump(const Duration(seconds: 8));
+    expect(playCount, 4);
+    await tester.pump(const Duration(seconds: 5, milliseconds: 999));
+    expect(stopCount, 0);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(stopCount, 1);
+    expect(playCount, 4);
+    await tester.pump(const Duration(seconds: 5));
+    expect(playCount, 4);
     expect(maxActivePlayers, 1);
+    await alert.dispose();
+  });
+
+  testWidgets('incoming alert stops early and ignores duplicate order IDs', (
+    tester,
+  ) async {
+    var playCount = 0;
+    var stopCount = 0;
+    final alert = NewOrderAlert(
+      stopSound: () async {
+        stopCount++;
+      },
+      playSound: () async {
+        playCount++;
+        await Future<void>.delayed(const Duration(seconds: 10));
+      },
+    );
+
+    alert.start('#MS-2051');
+    await tester.pump();
+    expect(playCount, 1);
+
+    await tester.pump(const Duration(seconds: 2));
     await alert.stop();
     expect(stopCount, 1);
-    final countAfterStop = playCount;
-    await Future<void>.delayed(const Duration(milliseconds: 35));
-    expect(playCount, countAfterStop);
+    alert.start('#MS-2051');
+    await tester.pump();
+    expect(playCount, 1);
+
+    alert.start('#MS-2052');
+    await tester.pump();
+    expect(playCount, 2);
     await alert.dispose();
+    expect(stopCount, 2);
+    await tester.pump(const Duration(seconds: 10));
+    expect(playCount, 2);
   });
 
   testWidgets('home omits duplicate shortcuts and recent delivery', (
