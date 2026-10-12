@@ -630,7 +630,7 @@ class _PerformanceTile extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 92),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.background,
+        color: AppTheme.performanceTile,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

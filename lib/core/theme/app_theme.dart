@@ -4,9 +4,15 @@ abstract final class AppTheme {
   static const brand = Color(0xFF16834A);
   static const darkGreen = Color(0xFF004225);
   static const brandYellow = Color(0xFFFFD51E);
-  static const background = Color(0xFFF7F8F5);
+  static const appBackground = Color(0xFFFFF9F2);
+  static const background = appBackground;
   static const surface = Color(0xFFFCFDFC);
+  static const fieldSurface = Color(0xFFF7F4ED);
   static const lightGreenSurface = Color(0xFFEFF8F4);
+  static const onlineBox = Color(0xFFFFFFFF);
+  static const summaryCard = Color(0xFFD8C9A8);
+  static const currentDeliveryCard = Color(0xFFFFFFFF);
+  static const performanceTile = Color(0xFFC7D3C0);
   static const primaryText = Color(0xFF202321);
   static const secondaryText = Color(0xFF777C79);
   static const success = brand;
@@ -28,8 +34,8 @@ abstract final class AppTheme {
   );
   static const greetingTitle = TextStyle(
     color: primaryText,
-    fontSize: 19,
-    fontWeight: FontWeight.w700,
+    fontSize: 24,
+    fontWeight: FontWeight.w800,
   );
   static const sectionTitle = TextStyle(
     color: primaryText,
@@ -68,7 +74,7 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: background,
+      scaffoldBackgroundColor: appBackground,
       fontFamily: 'Roboto',
       textTheme: const TextTheme(
         headlineSmall: screenTitle,

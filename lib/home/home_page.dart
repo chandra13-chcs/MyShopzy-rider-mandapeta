@@ -85,23 +85,31 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          width: 76,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppTheme.lightGreenSurface,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Text(
-            'MyShopzy',
-            maxLines: 1,
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-            ),
+        SizedBox(
+          width: 110,
+          height: 36,
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/sounds/logo.png',
+                fit: BoxFit.contain,
+                width: 36,
+                height: 36,
+              ),
+              const SizedBox(width: 4),
+              const Expanded(
+                child: Text(
+                  'MyShopzy',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 12),
@@ -111,14 +119,22 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 widget.demoData.greeting,
-                style: AppTheme.secondaryTextStyle,
+                style: const TextStyle(
+                  color: AppTheme.primaryText,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 widget.demoData.riderName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTheme.greetingTitle,
+                style: const TextStyle(
+                  color: AppTheme.primaryText,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -138,6 +154,7 @@ class _HomePageState extends State<HomePage> {
     final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
 
     return Card(
+      color: isAvailable ? AppTheme.onlineBox : AppTheme.surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
@@ -310,6 +327,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildActiveDelivery(DemoDelivery delivery) {
     return Card(
+      color: AppTheme.currentDeliveryCard,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -340,6 +358,10 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () => _openDeliveryPage(delivery),
                 icon: const Icon(Icons.arrow_forward_rounded),
                 label: const Text('Continue Delivery'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.darkGreen,
+                  foregroundColor: AppTheme.surface,
+                ),
               ),
             ),
           ],
@@ -387,6 +409,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: AppTheme.summaryCard,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
