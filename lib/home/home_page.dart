@@ -207,6 +207,12 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDailySummary() {
     final data = widget.demoData;
+    final settlementMinor = widget.offerStore.todaySettlementMinor;
+    final completedToday = widget.offerStore.todayCompletedDeliveries;
+    final isLiveApi = widget.offerStore.apiClient != null;
+    final earnings = settlementMinor == null && !isLiveApi
+        ? '₹${data.todayEarnings}'
+        : '₹${((settlementMinor ?? 0) / 100).toStringAsFixed(2)}';
     return Column(
       children: [
         Row(
@@ -215,7 +221,8 @@ class _HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.check_circle_outline_rounded,
                 label: 'Deliveries',
-                value: '${data.deliveriesCompleted}',
+                value:
+                    '${completedToday ?? (isLiveApi ? 0 : data.deliveriesCompleted)}',
                 detail: 'completed',
               ),
             ),
@@ -224,7 +231,7 @@ class _HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.payments_outlined,
                 label: "Today's earnings",
-                value: '₹${data.todayEarnings}',
+                value: earnings,
               ),
             ),
           ],

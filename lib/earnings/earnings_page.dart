@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/order_offer_store.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/status_badge.dart';
 import '../history/history_page.dart';
 import 'rider_earnings_demo_data.dart';
 
 class EarningsPage extends StatelessWidget {
-  const EarningsPage({super.key});
+  const EarningsPage({this.offerStore, super.key});
+
+  final OrderOfferStore? offerStore;
 
   @override
   Widget build(BuildContext context) {
@@ -42,19 +45,55 @@ class EarningsPage extends StatelessWidget {
                       style: TextStyle(color: AppTheme.onDarkSurface),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      _currency(summary.today),
-                      style: const TextStyle(
-                        color: AppTheme.surface,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 34,
+                    if (offerStore case final liveStore?)
+                      AnimatedBuilder(
+                        animation: liveStore,
+                        builder: (context, child) {
+                          final settlement = liveStore.todaySettlementMinor;
+                          return Text(
+                            settlement == null
+                                ? liveStore.apiClient == null
+                                      ? _currency(summary.today)
+                                      : _currency(0)
+                                : '₹${(settlement / 100).toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: AppTheme.surface,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 34,
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      Text(
+                        _currency(summary.today),
+                        style: const TextStyle(
+                          color: AppTheme.surface,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 34,
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 6),
-                    const Text(
-                      '5 deliveries completed',
-                      style: TextStyle(color: AppTheme.onDarkSurface),
-                    ),
+                    if (offerStore case final liveStore?)
+                      AnimatedBuilder(
+                        animation: liveStore,
+                        builder: (context, child) => Text(
+                          '${liveStore.todayCompletedDeliveries ?? (liveStore.apiClient == null ? 5 : 0)} deliveries completed',
+                          style: const TextStyle(color: AppTheme.onDarkSurface),
+                        ),
+                      )
+                    else
+                      const Text(
+                        '5 deliveries completed',
+                        style: TextStyle(color: AppTheme.onDarkSurface),
+                      ),
+                    if (offerStore?.earningsErrorMessage case final error?) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        error,
+                        style: const TextStyle(color: AppTheme.onDarkSurface),
+                      ),
+                    ],
                   ],
                 ),
               ),

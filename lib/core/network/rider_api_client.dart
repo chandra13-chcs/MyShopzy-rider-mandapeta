@@ -83,8 +83,20 @@ class RiderApiClient {
         .toList(growable: false);
   }
 
-  Future<Map<String, dynamic>> acceptOrder(String orderId) =>
-      _send('POST', '/rider/orders/${Uri.encodeComponent(orderId)}/accept');
+  Future<Map<String, dynamic>> acceptOrder(String orderId) async {
+    final response = await _send(
+      'POST',
+      '/rider/orders/${Uri.encodeComponent(orderId)}/accept',
+    );
+    final data = response['data'];
+    if (data is! Map<String, dynamic> ||
+        data['order'] is! Map<String, dynamic>) {
+      throw const FormatException(
+        'The server returned invalid accepted order details.',
+      );
+    }
+    return response;
+  }
 
   Future<Map<String, dynamic>> updateOrderStatus(
     String orderId,
@@ -100,6 +112,15 @@ class RiderApiClient {
     '/rider/location',
     body: {'latitude': lat, 'longitude': lng},
   );
+
+  Future<Map<String, dynamic>> updateAvailability(bool isOnline) => _send(
+    'PATCH',
+    '/rider/availability',
+    body: {'isOnline': isOnline},
+  );
+
+  Future<Map<String, dynamic>> getEarningsSummary() =>
+      _send('GET', '/rider/earnings/summary');
 
   Future<Map<String, dynamic>> _send(
     String method,

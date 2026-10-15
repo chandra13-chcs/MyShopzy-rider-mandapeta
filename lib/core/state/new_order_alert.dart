@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class NewOrderAlert {
   NewOrderAlert({
     this.alertDuration = const Duration(seconds: 30),
     Future<void> Function()? playSound,
     this.stopSound,
+    Future<void> Function()? vibrate,
   }) : _player = playSound == null ? AudioPlayer() : null,
-       _playSound = playSound {
+       _playSound = playSound,
+       _vibrate = vibrate ?? HapticFeedback.heavyImpact {
     _completionSubscription = _player?.onPlayerComplete.listen((_) {
       final orderId = _orderId;
       if (orderId != null) _playbackCompleted(orderId, _generation);
@@ -21,9 +24,11 @@ class NewOrderAlert {
   final Duration alertDuration;
   final AudioPlayer? _player;
   final Future<void> Function()? _playSound;
+  final Future<void> Function() _vibrate;
   final Future<void> Function()? stopSound;
   final Set<String> _alertedOrderIds = {};
   Timer? _windowTimer;
+  Timer? _vibrationTimer;
   String? _orderId;
   bool _isPlaying = false;
   int _generation = 0;
@@ -41,6 +46,10 @@ class NewOrderAlert {
     _isPlaying = false;
     _windowTimer = Timer(alertDuration, () {
       unawaited(stop());
+    });
+    unawaited(_vibrateSafely());
+    _vibrationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      unawaited(_vibrateSafely());
     });
 
     if (shouldStopPrevious) {
@@ -115,11 +124,21 @@ class NewOrderAlert {
     return next;
   }
 
+  Future<void> _vibrateSafely() async {
+    try {
+      await _vibrate();
+    } on Exception catch (error) {
+      debugPrint('Unable to vibrate for the incoming-order alert: $error');
+    }
+  }
+
   Future<void> stop() async {
     final wasActive = _windowTimer != null || _orderId != null || _isPlaying;
     ++_generation;
     _windowTimer?.cancel();
     _windowTimer = null;
+    _vibrationTimer?.cancel();
+    _vibrationTimer = null;
     _orderId = null;
     _isPlaying = false;
     if (wasActive) await _stopPlayback();

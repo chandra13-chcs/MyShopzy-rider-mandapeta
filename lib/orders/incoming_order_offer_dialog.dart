@@ -9,9 +9,6 @@ class IncomingOrderOfferDialog extends StatelessWidget {
 
   final OrderOfferStore offerStore;
 
-  static const primaryGreen = Color(0xFF00552F);
-  static const _yellow = Color(0xFFFFD51E);
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -47,13 +44,13 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: primaryGreen,
+                          color: AppTheme.brand,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
                           'NEW ORDER',
                           style: TextStyle(
-                            color: _yellow,
+                            color: AppTheme.brandYellow,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
@@ -66,7 +63,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                         size: 18,
                         color: offerStore.secondsRemaining <= 5
                             ? AppTheme.error
-                            : primaryGreen,
+                            : AppTheme.brand,
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -74,7 +71,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                         style: TextStyle(
                           color: offerStore.secondsRemaining <= 5
                               ? AppTheme.error
-                              : primaryGreen,
+                              : AppTheme.brand,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -95,7 +92,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                         Text(
                           '₹${delivery.calculatedPayout}',
                           style: const TextStyle(
-                            color: primaryGreen,
+                            color: AppTheme.brand,
                             fontSize: 30,
                             fontWeight: FontWeight.w800,
                           ),
@@ -174,7 +171,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                               ? () => _accept(context)
                               : null,
                           style: FilledButton.styleFrom(
-                            backgroundColor: primaryGreen,
+                            backgroundColor: AppTheme.brand,
                             foregroundColor: Colors.white,
                             minimumSize: const Size(48, 52),
                             textStyle: const TextStyle(
@@ -204,9 +201,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
     if (accepted) {
       navigator.pop(true);
     } else if (context.mounted && offerStore.errorMessage != null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(offerStore.errorMessage!)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(offerStore.errorMessage!)));
     }
   }
 
@@ -235,7 +230,7 @@ class _RouteHeader extends StatelessWidget {
           const Text(
             'PICKUP  →  DROP',
             style: TextStyle(
-              color: IncomingOrderOfferDialog.primaryGreen,
+              color: AppTheme.brand,
               fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.8,
@@ -244,10 +239,7 @@ class _RouteHeader extends StatelessWidget {
           const Spacer(),
           Row(
             children: [
-              const Icon(
-                Icons.storefront_rounded,
-                color: IncomingOrderOfferDialog.primaryGreen,
-              ),
+              const Icon(Icons.storefront_rounded, color: AppTheme.brand),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -265,10 +257,7 @@ class _RouteHeader extends StatelessWidget {
                 color: AppTheme.secondaryText,
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.location_on_rounded,
-                color: IncomingOrderOfferDialog.primaryGreen,
-              ),
+              const Icon(Icons.location_on_rounded, color: AppTheme.brand),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -305,11 +294,7 @@ class _LocationPanel extends StatelessWidget {
           children: [
             const Column(
               children: [
-                Icon(
-                  Icons.storefront_rounded,
-                  size: 19,
-                  color: IncomingOrderOfferDialog.primaryGreen,
-                ),
+                Icon(Icons.storefront_rounded, size: 19, color: AppTheme.brand),
                 SizedBox(height: 5),
                 SizedBox(
                   height: 18,
@@ -323,7 +308,7 @@ class _LocationPanel extends StatelessWidget {
                 Icon(
                   Icons.location_on_rounded,
                   size: 19,
-                  color: IncomingOrderOfferDialog.primaryGreen,
+                  color: AppTheme.brand,
                 ),
               ],
             ),
@@ -388,7 +373,7 @@ class _DistancePill extends StatelessWidget {
       child: Text(
         '$label · $value',
         style: const TextStyle(
-          color: IncomingOrderOfferDialog.primaryGreen,
+          color: AppTheme.brand,
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -43,7 +44,7 @@ class OrderOfferStore extends ChangeNotifier {
     DemoDelivery? activeDelivery = DemoDelivery.batchThreeActive,
     DemoDelivery? offer = DemoDelivery.newOffer,
     this.apiClient,
-    this.offerDuration = const Duration(seconds: 20),
+    this.offerDuration = const Duration(seconds: 30),
   }) : activeDelivery = activeDelivery,
        offer = offer,
        pickupStatus = activeDelivery == null
@@ -71,12 +72,20 @@ class OrderOfferStore extends ChangeNotifier {
   String? errorMessage;
   bool isLoadingOffers = false;
   bool isAccepting = false;
+  bool isUpdatingOrderStatus = false;
+  int? todaySettlementMinor;
+  int? todayCompletedDeliveries;
+  int? _lastDeliveredPayoutMinor;
+  String? earningsErrorMessage;
   Timer? _timer;
   Timer? _pollTimer;
   bool _disposed = false;
+  bool _isFlushingQueuedStatuses = false;
+  final List<({String orderId, String status})> _queuedOrderStatuses = [];
   final Set<String> _rejectedOrderIds = {};
 
   bool get isBusy => activeDelivery != null;
+  int get queuedOrderStatusCount => _queuedOrderStatuses.length;
 
   String get activeDeliveryStatus => pickupStatus == PickupStatus.onTheWay
       ? deliveryStatus.label
@@ -105,6 +114,9 @@ class OrderOfferStore extends ChangeNotifier {
           _timer?.cancel();
           _timer = null;
         }
+      }
+      if (availabilityStore.isConnected) {
+        unawaited(_flushQueuedOrderStatuses());
       }
     }
     _updateTimer();
@@ -137,7 +149,7 @@ class OrderOfferStore extends ChangeNotifier {
       DemoDelivery? nextOffer;
       for (final order in orders) {
         if (!_rejectedOrderIds.contains(order.orderId)) {
-          nextOffer = order;
+          nextOffer = _estimateDistances(order);
           break;
         }
       }
@@ -192,7 +204,7 @@ class OrderOfferStore extends ChangeNotifier {
   }
 
   bool acceptOffer() {
-    if (!canAccept || offer == null) return false;
+    if (apiClient != null || !canAccept || offer == null) return false;
 
     _timer?.cancel();
     _timer = null;
@@ -216,11 +228,16 @@ class OrderOfferStore extends ChangeNotifier {
     _timer = null;
     notifyListeners();
     try {
-      await client.acceptOrder(currentOffer.orderId);
+      final response = await client.acceptOrder(currentOffer.orderId);
       if (_disposed || offer?.orderId != currentOffer.orderId) return false;
+      final acceptedOrder =
+          (response['data'] as Map<String, dynamic>?)?['order'];
+      final enrichedOffer = acceptedOrder is Map<String, dynamic>
+          ? _estimateDistances(DemoDelivery.fromRiderApiJson(acceptedOrder))
+          : currentOffer;
       isAccepting = false;
       status = OrderOfferStatus.accepted;
-      activeDelivery = currentOffer;
+      activeDelivery = enrichedOffer;
       pickupStatus = PickupStatus.goingToPickup;
       deliveryStatus = DeliveryStatus.goingToCustomer;
       notifyListeners();
@@ -240,6 +257,8 @@ class OrderOfferStore extends ChangeNotifier {
       }
       errorMessage = error is RiderApiException
           ? error.message
+          : error is FormatException
+          ? 'The server returned invalid order details.'
           : 'Unable to accept this order.';
       _updateTimer();
       notifyListeners();
@@ -263,6 +282,10 @@ class OrderOfferStore extends ChangeNotifier {
   }
 
   bool completeActiveDelivery(DemoDelivery delivery) {
+    return apiClient == null && _finalizeActiveDelivery(delivery);
+  }
+
+  bool _finalizeActiveDelivery(DemoDelivery delivery) {
     if (activeDelivery?.orderId != delivery.orderId ||
         pickupStatus != PickupStatus.onTheWay ||
         deliveryStatus != DeliveryStatus.handOver) {
@@ -271,17 +294,11 @@ class OrderOfferStore extends ChangeNotifier {
 
     _timer?.cancel();
     _timer = null;
-    final orderId = delivery.orderId;
     deliveryStatus = DeliveryStatus.delivered;
     activeDelivery = null;
     pickupStatus = PickupStatus.goingToPickup;
     status = OrderOfferStatus.noOffer;
     secondsRemaining = offerDuration.inSeconds;
-    if (apiClient != null) {
-      _updateRemoteStatus(orderId, 'delivered');
-      offer = null;
-      unawaited(refreshAvailableOrders());
-    }
     notifyListeners();
     return true;
   }
@@ -299,28 +316,22 @@ class OrderOfferStore extends ChangeNotifier {
   );
 
   bool verifyPickup(DemoDelivery delivery, String enteredDigits) {
-    if (activeDelivery?.orderId != delivery.orderId ||
+    if (apiClient != null ||
+        activeDelivery?.orderId != delivery.orderId ||
         pickupStatus != PickupStatus.orderDetails) {
       return false;
     }
 
-    final expectedDigits = delivery.orderId.replaceAll(RegExp(r'\D'), '');
-    final lastFourDigits = expectedDigits.length < 4
-        ? expectedDigits
-        : expectedDigits.substring(expectedDigits.length - 4);
-    if (!RegExp(r'^\d{4}$').hasMatch(enteredDigits) ||
-        enteredDigits != lastFourDigits) {
-      return false;
-    }
+    if (!_hasValidPickupDigits(delivery, enteredDigits)) return false;
 
     pickupStatus = PickupStatus.pickedUp;
-    _updateRemoteStatus(delivery.orderId, 'picked_up');
     notifyListeners();
     return true;
   }
 
   bool continueToDelivery(DemoDelivery delivery) {
-    if (activeDelivery?.orderId != delivery.orderId ||
+    if (apiClient != null ||
+        activeDelivery?.orderId != delivery.orderId ||
         pickupStatus != PickupStatus.pickedUp) {
       return false;
     }
@@ -330,6 +341,149 @@ class OrderOfferStore extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+
+  Future<bool> confirmPickup(
+    DemoDelivery delivery,
+    String enteredDigits,
+  ) async {
+    if (!_hasValidPickupDigits(delivery, enteredDigits) ||
+        activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.orderDetails ||
+        isUpdatingOrderStatus) {
+      return false;
+    }
+    if (!await _updateRemoteStatus(delivery.orderId, 'picked_up')) {
+      return false;
+    }
+    pickupStatus = PickupStatus.pickedUp;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> startDelivery(DemoDelivery delivery) async {
+    if (activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.pickedUp ||
+        isUpdatingOrderStatus) {
+      return false;
+    }
+    if (!await _updateRemoteStatus(delivery.orderId, 'out_for_delivery')) {
+      return false;
+    }
+    pickupStatus = PickupStatus.onTheWay;
+    deliveryStatus = DeliveryStatus.goingToCustomer;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> completeDelivery(DemoDelivery delivery) async {
+    if (apiClient == null) return completeActiveDelivery(delivery);
+    if (activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.onTheWay ||
+        deliveryStatus != DeliveryStatus.handOver ||
+        isUpdatingOrderStatus) {
+      return false;
+    }
+    if (!await _updateRemoteStatus(delivery.orderId, 'delivered')) {
+      return false;
+    }
+    final completed = _finalizeActiveDelivery(delivery);
+    if (completed) {
+      final currentSettlement = todaySettlementMinor;
+      final currentCount = todayCompletedDeliveries;
+      if (currentSettlement != null && _lastDeliveredPayoutMinor != null) {
+        todaySettlementMinor = currentSettlement + _lastDeliveredPayoutMinor!;
+      }
+      if (currentCount != null) todayCompletedDeliveries = currentCount + 1;
+      offer = null;
+      unawaited(refreshAvailableOrders());
+      unawaited(refreshEarnings());
+    }
+    return completed;
+  }
+
+  Future<void> refreshEarnings() async {
+    final client = apiClient;
+    if (client == null || !availabilityStore.isConnected) return;
+    try {
+      final response = await client.getEarningsSummary();
+      final data = response['data'];
+      final summary = data is Map<String, dynamic> ? data['summary'] : null;
+      if (summary is! Map<String, dynamic>) {
+        throw const FormatException('Missing earnings summary.');
+      }
+      final payoutMinor = _readNonNegativeInt(summary['todayPayoutMinor']);
+      final completed = _readNonNegativeInt(summary['todayDeliveries']);
+      if (payoutMinor == null || completed == null) {
+        throw const FormatException('Invalid earnings summary.');
+      }
+      todaySettlementMinor = payoutMinor;
+      todayCompletedDeliveries = completed;
+      earningsErrorMessage = null;
+    } on Object catch (error) {
+      earningsErrorMessage = error is RiderApiException
+          ? error.message
+          : 'Unable to load your earnings summary.';
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  static int? _readNonNegativeInt(Object? value) {
+    final parsed = value is int ? value : int.tryParse('$value');
+    return parsed != null && parsed >= 0 ? parsed : null;
+  }
+
+  DemoDelivery _estimateDistances(DemoDelivery delivery) {
+    final riderPosition = availabilityStore.lastPosition;
+    final pickupDistance = riderPosition == null ||
+            delivery.pickupLatitude == null ||
+            delivery.pickupLongitude == null
+        ? null
+        : _distanceKm(
+            riderPosition.latitude,
+            riderPosition.longitude,
+            delivery.pickupLatitude!,
+            delivery.pickupLongitude!,
+          );
+    final deliveryDistance = delivery.pickupLatitude == null ||
+            delivery.pickupLongitude == null ||
+            delivery.dropLatitude == null ||
+            delivery.dropLongitude == null
+        ? null
+        : _distanceKm(
+            delivery.pickupLatitude!,
+            delivery.pickupLongitude!,
+            delivery.dropLatitude!,
+            delivery.dropLongitude!,
+          );
+    if (pickupDistance == null && deliveryDistance == null) return delivery;
+    final total = (pickupDistance ?? 0) + (deliveryDistance ?? 0);
+    return delivery.copyWith(
+      distanceKm: total,
+      pickupDistanceKm: pickupDistance,
+      deliveryDistanceKm: deliveryDistance,
+      hasRouteEstimate: true,
+    );
+  }
+
+  static double _distanceKm(
+    double firstLatitude,
+    double firstLongitude,
+    double secondLatitude,
+    double secondLongitude,
+  ) {
+    const earthRadiusKm = 6371.0088;
+    final latitudeDelta = _radians(secondLatitude - firstLatitude);
+    final longitudeDelta = _radians(secondLongitude - firstLongitude);
+    final haversine =
+        math.sin(latitudeDelta / 2) * math.sin(latitudeDelta / 2) +
+        math.cos(_radians(firstLatitude)) *
+            math.cos(_radians(secondLatitude)) *
+            math.sin(longitudeDelta / 2) *
+            math.sin(longitudeDelta / 2);
+    return earthRadiusKm * 2 * math.asin(math.sqrt(haversine.clamp(0, 1)));
+  }
+
+  static double _radians(double degrees) => degrees * math.pi / 180;
 
   bool arriveAtCustomer(DemoDelivery delivery) => _advanceDelivery(
     delivery,
@@ -395,20 +549,113 @@ class OrderOfferStore extends ChangeNotifier {
     super.dispose();
   }
 
-  void _updateRemoteStatus(String orderId, String nextStatus) {
-    final client = apiClient;
-    if (client == null) return;
-    unawaited(
-      client
-          .updateOrderStatus(orderId, nextStatus)
-          .catchError((Object error) {
-            if (_disposed) return <String, dynamic>{};
-            errorMessage = error is RiderApiException
-                ? error.message
-                : 'Unable to update the order status.';
-            notifyListeners();
-            return <String, dynamic>{};
-          }),
-    );
+  Future<bool> _updateRemoteStatus(String orderId, String nextStatus) async {
+    if (apiClient == null) return true;
+    if (isUpdatingOrderStatus) return false;
+    isUpdatingOrderStatus = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      if (!availabilityStore.isConnected) {
+        _queueOrderStatus(orderId, nextStatus);
+        errorMessage = 'Saved offline. This status will sync when connected.';
+        return true;
+      }
+      final response = await apiClient!.updateOrderStatus(orderId, nextStatus);
+      _recordDeliveredPayout(nextStatus, response);
+      return true;
+    } on Object catch (error) {
+      if (error is RiderApiException && error.statusCode == 0) {
+        _queueOrderStatus(orderId, nextStatus);
+        availabilityStore.setConnectivityAvailable(false);
+        errorMessage = 'Saved offline. This status will sync when connected.';
+        return true;
+      }
+      _setStatusError(error);
+      return false;
+    } finally {
+      isUpdatingOrderStatus = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _queueOrderStatus(String orderId, String status) {
+    if (_queuedOrderStatuses.any(
+      (entry) => entry.orderId == orderId && entry.status == status,
+    )) {
+      return;
+    }
+    _queuedOrderStatuses.add((orderId: orderId, status: status));
+    notifyListeners();
+  }
+
+  Future<void> _flushQueuedOrderStatuses() async {
+    if (_isFlushingQueuedStatuses ||
+        _queuedOrderStatuses.isEmpty ||
+        !availabilityStore.isConnected ||
+        apiClient == null) {
+      return;
+    }
+
+    _isFlushingQueuedStatuses = true;
+    try {
+      while (_queuedOrderStatuses.isNotEmpty &&
+          availabilityStore.isConnected) {
+        final queued = _queuedOrderStatuses.first;
+        try {
+          final response = await apiClient!.updateOrderStatus(
+            queued.orderId,
+            queued.status,
+          );
+          _queuedOrderStatuses.removeAt(0);
+          _recordDeliveredPayout(queued.status, response);
+          if (queued.status == 'delivered') unawaited(refreshEarnings());
+          errorMessage = null;
+          if (!_disposed) notifyListeners();
+        } on Object catch (error) {
+          _setStatusError(error);
+          if (error is RiderApiException && error.statusCode == 0) {
+            availabilityStore.setConnectivityAvailable(false);
+          }
+          if (!_disposed) notifyListeners();
+          break;
+        }
+      }
+    } finally {
+      _isFlushingQueuedStatuses = false;
+    }
+  }
+
+  void _recordDeliveredPayout(
+    String status,
+    Map<String, dynamic> response,
+  ) {
+    if (status != 'delivered') return;
+    final data = response['data'];
+    final order = data is Map<String, dynamic> ? data['order'] : null;
+    _lastDeliveredPayoutMinor = order is Map<String, dynamic>
+        ? _readNonNegativeInt(order['payoutMinor'])
+        : null;
+  }
+
+  void _setStatusError(Object error) {
+    if (error is RiderApiException && error.statusCode == 0) {
+      availabilityStore.setConnectivityAvailable(false);
+    }
+    errorMessage = error is RiderApiException
+        ? error.message
+        : 'Unable to update the order status.';
+  }
+
+  static bool _hasValidPickupDigits(
+    DemoDelivery delivery,
+    String enteredDigits,
+  ) {
+    final expectedDigits = delivery.orderId.replaceAll(RegExp(r'\D'), '');
+    final lastFourDigits = expectedDigits.length < 4
+        ? expectedDigits
+        : expectedDigits.substring(expectedDigits.length - 4);
+    return RegExp(r'^\d{4}$').hasMatch(enteredDigits) &&
+        enteredDigits == lastFourDigits;
   }
 }

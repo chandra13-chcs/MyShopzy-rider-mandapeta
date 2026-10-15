@@ -14,6 +14,13 @@ class DemoDelivery {
     required this.status,
     this.pickupDistanceKm,
     this.deliveryDistanceKm,
+    this.storePhone,
+    this.customerPhone,
+    this.pickupLatitude,
+    this.pickupLongitude,
+    this.dropLatitude,
+    this.dropLongitude,
+    this.hasServerPayout = false,
     this.vehicle = 'Bike',
     this.timeWindow = DeliveryTimeWindow.day,
     this.rain = false,
@@ -44,6 +51,8 @@ class DemoDelivery {
     status: 'New Offer',
     pickupDistanceKm: 1.8,
     deliveryDistanceKm: 2.4,
+    customerPhone: null,
+    storePhone: null,
     timeWindow: DeliveryTimeWindow.day,
   );
 
@@ -58,19 +67,34 @@ class DemoDelivery {
     final customer = deliveryAddress is Map<String, dynamic>
         ? deliveryAddress['customerName'] ?? deliveryAddress['name']
         : null;
+    final customerName = json['customerName'] ?? customer;
+    final customerPhone = json['customerPhone'];
+    final storePhone = json['storePhone'];
+    final serverPayout = _optionalInteger(json['payout']);
     final distanceKm = _optionalNumber(json['distanceKm']);
     final pickupDistanceKm = _optionalNumber(json['pickupDistanceKm']);
     final deliveryDistanceKm = _optionalNumber(json['deliveryDistanceKm']);
     return DemoDelivery(
       orderId: orderId,
       store: store,
-      customer: customer is String && customer.isNotEmpty
-          ? customer
+      customer: customerName is String && customerName.isNotEmpty
+          ? customerName
           : 'Customer',
       pickup: _formatAddress(json['pickup']),
       drop: _formatAddress(deliveryAddress),
+      customerPhone: customerPhone is String && customerPhone.trim().isNotEmpty
+          ? customerPhone.trim()
+          : null,
+      storePhone: storePhone is String && storePhone.trim().isNotEmpty
+          ? storePhone.trim()
+          : null,
+      pickupLatitude: _optionalCoordinate(json['pickupLatitude'], -90, 90),
+      pickupLongitude: _optionalCoordinate(json['pickupLongitude'], -180, 180),
+      dropLatitude: _optionalCoordinate(json['dropLatitude'], -90, 90),
+      dropLongitude: _optionalCoordinate(json['dropLongitude'], -180, 180),
       distanceKm: distanceKm ?? 0,
-      payout: _optionalInteger(json['payout']) ?? 40,
+      payout: serverPayout ?? 40,
+      hasServerPayout: serverPayout != null,
       status: json['status'] is String ? json['status'] as String : 'New Offer',
       pickupDistanceKm: pickupDistanceKm,
       deliveryDistanceKm: deliveryDistanceKm,
@@ -86,6 +110,13 @@ class DemoDelivery {
   final String customer;
   final String pickup;
   final String drop;
+  final String? customerPhone;
+  final String? storePhone;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
+  final double? dropLatitude;
+  final double? dropLongitude;
+  final bool hasServerPayout;
   final double distanceKm;
   final int payout;
   final String status;
@@ -121,9 +152,11 @@ class DemoDelivery {
 
   int get rainCharge => rain ? 10 : 0;
 
-  int get calculatedPayout => basePayout + distanceCharge + rainCharge;
+  int get calculatedPayout =>
+      hasServerPayout ? payout : basePayout + distanceCharge + rainCharge;
 
   String get payoutBreakdown {
+    if (hasServerPayout) return 'Total payout: ₹$payout';
     final extraKm = effectiveDeliveryDistance > 4
         ? (effectiveDeliveryDistance - 4).ceil()
         : 0;
@@ -159,7 +192,12 @@ class DemoDelivery {
 
   static int? _optionalInteger(Object? value) {
     if (value is int) return value;
-    if (value is String) return int.tryParse(value);
+    if (value is String) {
+      final integer = int.tryParse(value);
+      if (integer != null) return integer;
+      final number = double.tryParse(value);
+      return number != null && number.isFinite ? number.round() : null;
+    }
     if (value is num && value.isFinite) return value.round();
     return null;
   }
@@ -169,27 +207,52 @@ class DemoDelivery {
     return number != null && number.isFinite ? math.max(0, number) : null;
   }
 
+  static double? _optionalCoordinate(
+    Object? value,
+    double minimum,
+    double maximum,
+  ) {
+    final signed = value is num ? value.toDouble() : double.tryParse('$value');
+    return signed != null &&
+            signed.isFinite &&
+            signed >= minimum &&
+            signed <= maximum
+        ? signed
+        : null;
+  }
+
   DemoDelivery copyWith({
     String? status,
+    double? distanceKm,
     double? pickupDistanceKm,
     double? deliveryDistanceKm,
+    bool? hasRouteEstimate,
     DeliveryTimeWindow? timeWindow,
     bool? rain,
     int? payout,
+    String? customerPhone,
+    String? storePhone,
   }) => DemoDelivery(
     orderId: orderId,
     store: store,
     customer: customer,
     pickup: pickup,
     drop: drop,
-    distanceKm: distanceKm,
+    customerPhone: customerPhone ?? this.customerPhone,
+    storePhone: storePhone ?? this.storePhone,
+    pickupLatitude: pickupLatitude,
+    pickupLongitude: pickupLongitude,
+    dropLatitude: dropLatitude,
+    dropLongitude: dropLongitude,
+    distanceKm: distanceKm ?? this.distanceKm,
     payout: payout ?? this.payout,
+    hasServerPayout: hasServerPayout,
     status: status ?? this.status,
     pickupDistanceKm: pickupDistanceKm ?? this.pickupDistanceKm,
     deliveryDistanceKm: deliveryDistanceKm ?? this.deliveryDistanceKm,
     vehicle: vehicle,
     timeWindow: timeWindow ?? this.timeWindow,
     rain: rain ?? this.rain,
-    hasRouteEstimate: hasRouteEstimate,
+    hasRouteEstimate: hasRouteEstimate ?? this.hasRouteEstimate,
   );
 }

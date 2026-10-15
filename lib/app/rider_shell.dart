@@ -7,6 +7,7 @@ import '../core/state/new_order_alert.dart';
 import '../core/state/order_offer_store.dart';
 import '../core/models/demo_delivery.dart';
 import '../core/network/rider_api_client.dart';
+import '../core/theme/app_theme.dart';
 import '../delivery/delivery_page.dart';
 import '../earnings/earnings_page.dart';
 import '../gigs/gigs_page.dart';
@@ -49,7 +50,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   late final _pages = [
     HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
-    const EarningsPage(),
+    EarningsPage(offerStore: _offerStore),
     const GigsPage(),
     ProfilePage(availabilityStore: _availabilityStore),
   ];
@@ -63,6 +64,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
       if (!mounted) return;
       if (widget.apiClient != null) {
         unawaited(_offerStore.refreshAvailableOrders());
+        unawaited(_offerStore.refreshEarnings());
       }
       _handleOfferStoreChanged();
     });
@@ -152,7 +154,18 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: AnimatedBuilder(
+        animation: _availabilityStore,
+        builder: (context, _) => Column(
+          children: [
+            if (_availabilityStore.isOverspeeding)
+              _OverspeedingBanner(speedKmh: _availabilityStore.speedKmh),
+            Expanded(
+              child: IndexedStack(index: _selectedIndex, children: _pages),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         animationDuration: const Duration(milliseconds: 200),
@@ -186,6 +199,55 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
             label: 'Profile',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OverspeedingBanner extends StatelessWidget {
+  const _OverspeedingBanner({required this.speedKmh});
+
+  final double? speedKmh;
+
+  @override
+  Widget build(BuildContext context) {
+    final speed = speedKmh;
+    final message = speed == null
+        ? 'Overspeeding Alert: Please ride safely below 50 km/h!'
+        : 'Overspeeding Alert: Please ride safely below 50 km/h! '
+              'Current speed: ${speed.toStringAsFixed(1)} km/h.';
+
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: message,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          width: double.infinity,
+          color: AppTheme.brandYellow,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppTheme.darkGreen,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

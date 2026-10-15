@@ -1,5 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/models/demo_delivery.dart';
@@ -56,6 +62,17 @@ class DeliveryPage extends StatelessWidget {
             style: AppTheme.secondaryTextStyle,
           ),
           const SizedBox(height: 20),
+          if (store != null && store.queuedOrderStatusCount > 0) ...[
+            _SyncPendingNotice(count: store.queuedOrderStatusCount),
+            const SizedBox(height: 12),
+          ],
+          if (isActive) ...[
+            _RouteMapCard(
+              delivery: delivery,
+              riderPosition: store?.availabilityStore.lastPosition,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (pickupStatus != null) ...[
             Card(
               child: Padding(
@@ -148,9 +165,33 @@ class DeliveryPage extends StatelessWidget {
   ) {
     switch (pickupStatus) {
       case PickupStatus.goingToPickup:
-        return _primaryAction(
-          'Reached Store',
-          () => store.reachStore(delivery),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _openNavigation(
+                context,
+                delivery.pickup,
+                delivery.pickupLatitude,
+                delivery.pickupLongitude,
+              ),
+              icon: const Icon(Icons.navigation_rounded),
+              label: const Text('Navigate to Store'),
+            ),
+            if (_phoneUri(delivery.storePhone) case final storePhoneUri?) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _openContact(context, storePhoneUri),
+                icon: const Icon(Icons.call_outlined),
+                label: const Text('Call Store'),
+              ),
+            ],
+            const SizedBox(height: 8),
+            _primaryAction(
+              'Reached Store',
+              () => store.reachStore(delivery),
+            ),
+          ],
         );
       case PickupStatus.reachedPickup:
         return _primaryAction('Order Details', () {
@@ -171,7 +212,10 @@ class DeliveryPage extends StatelessWidget {
             const SizedBox(height: 12),
             _primaryAction(
               'Start Delivery',
-              () => store.continueToDelivery(delivery),
+              () => _runOrderTransition(
+                context,
+                () => store.startDelivery(delivery),
+              ),
             ),
           ],
         );
@@ -190,8 +234,19 @@ class DeliveryPage extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCustomerDeliverySummary(),
+            _buildCustomerDeliverySummary(context),
             const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _openNavigation(
+                context,
+                delivery.drop,
+                delivery.dropLatitude,
+                delivery.dropLongitude,
+              ),
+              icon: const Icon(Icons.navigation_rounded),
+              label: const Text('Navigate to Customer'),
+            ),
+            const SizedBox(height: 8),
             _primaryAction(
               'Reached Customer',
               () => store.arriveAtCustomer(delivery),
@@ -217,6 +272,8 @@ class DeliveryPage extends StatelessWidget {
                 Text('Drop: ${delivery.drop}'),
                 const SizedBox(height: 6),
                 Text('Payout: ₹${delivery.payout}'),
+                const SizedBox(height: 12),
+                _customerContactActions(context),
                 const SizedBox(height: 16),
                 _primaryAction(
                   'Hand Over',
@@ -252,7 +309,7 @@ class DeliveryPage extends StatelessWidget {
     }
   }
 
-  Widget _buildCustomerDeliverySummary() {
+  Widget _buildCustomerDeliverySummary(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -277,6 +334,8 @@ class DeliveryPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text('Payout: ₹${delivery.payout}'),
+                const SizedBox(height: 12),
+                _customerContactActions(context),
               ],
             ),
           ),
@@ -285,17 +344,111 @@ class DeliveryPage extends StatelessWidget {
     );
   }
 
-  void _completeDelivery(BuildContext context, OrderOfferStore store) {
-    if (!store.completeActiveDelivery(delivery)) return;
+  Future<void> _completeDelivery(
+    BuildContext context,
+    OrderOfferStore store,
+  ) async {
+    final completed = await store.completeDelivery(delivery);
+    if (!context.mounted) return;
+    if (!completed) {
+      final message =
+          store.errorMessage ?? 'Unable to complete this delivery yet.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
     final navigator = Navigator.of(context);
     if (navigator.canPop()) {
       navigator.pop(true);
     }
   }
 
+  Future<void> _runOrderTransition(
+    BuildContext context,
+    Future<bool> Function() transition,
+  ) async {
+    final completed = await transition();
+    if (!context.mounted || completed) return;
+    final message =
+        offerStore?.errorMessage ?? 'Unable to update this order status.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _customerContactActions(BuildContext context) {
+    final phone = delivery.customerPhone;
+    final phoneUri = _phoneUri(phone);
+    return Wrap(
+      spacing: 8,
+      children: [
+        OutlinedButton.icon(
+          onPressed: phoneUri == null
+              ? null
+              : () => _openContact(context, phoneUri),
+          icon: const Icon(Icons.call_outlined),
+          label: const Text('Call'),
+        ),
+        OutlinedButton.icon(
+          onPressed: phoneUri == null
+              ? null
+              : () => _openContact(
+                  context,
+                  Uri(scheme: 'sms', path: phoneUri.path),
+                ),
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          label: const Text('Chat'),
+        ),
+      ],
+    );
+  }
+
+  static Uri? _phoneUri(String? phone) {
+    if (phone == null) return null;
+    final normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (!RegExp(r'^\+?\d{5,15}$').hasMatch(normalized)) return null;
+    return Uri(scheme: 'tel', path: normalized);
+  }
+
+  Future<void> _openNavigation(
+    BuildContext context,
+    String address,
+    double? latitude,
+    double? longitude,
+  ) async {
+    final destination = latitude != null && longitude != null
+        ? '$latitude,$longitude'
+        : address;
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': destination,
+      'travelmode': 'driving',
+    });
+    await _openContact(context, uri);
+  }
+
+  Future<void> _openContact(BuildContext context, Uri uri) async {
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('No application can open this link.');
+      }
+    } on Object catch (error) {
+      if (!context.mounted) return;
+      final message = error is StateError
+          ? 'Unable to open the selected navigation or contact app.'
+          : 'Unable to open the selected navigation or contact app.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   Widget _primaryAction(String label, VoidCallback onPressed) {
     return FilledButton(
-      onPressed: onPressed,
+      onPressed: offerStore?.isUpdatingOrderStatus == true
+          ? null
+          : onPressed,
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 15),
       ),
@@ -329,16 +482,21 @@ class _PickupVerificationFormState extends State<_PickupVerificationForm> {
     super.dispose();
   }
 
-  void _verify() {
+  Future<void> _verify() async {
     if (!_formKey.currentState!.validate()) return;
-    if (widget.offerStore.verifyPickup(
-      widget.delivery,
-      _digitsController.text,
-    )) {
+    final store = widget.offerStore;
+    final confirmed = store.apiClient == null
+        ? store.verifyPickup(widget.delivery, _digitsController.text)
+        : await store.confirmPickup(widget.delivery, _digitsController.text);
+    if (!mounted) return;
+    if (confirmed) {
       return;
     }
 
-    setState(() => _verificationError = 'Those digits do not match the order.');
+    setState(
+      () => _verificationError =
+          store.errorMessage ?? 'Those digits do not match the order.',
+    );
   }
 
   @override
@@ -397,8 +555,12 @@ class _PickupVerificationFormState extends State<_PickupVerificationForm> {
               ],
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: _verify,
-                child: const Text('Verify Pickup'),
+                onPressed: widget.offerStore.isUpdatingOrderStatus
+                    ? null
+                    : _verify,
+                child: widget.offerStore.isUpdatingOrderStatus
+                    ? const Text('Updating...')
+                    : const Text('Verify Pickup'),
               ),
             ],
           ),
@@ -466,4 +628,271 @@ class _StopCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RouteMapCard extends StatelessWidget {
+  const _RouteMapCard({required this.delivery, required this.riderPosition});
+
+  static const _tileUrlTemplate = String.fromEnvironment(
+    'RIDER_MAP_TILE_URL',
+    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+
+  final DemoDelivery delivery;
+  final Position? riderPosition;
+
+  @override
+  Widget build(BuildContext context) {
+    final stops = <_MapStop>[
+      if (riderPosition != null)
+        _MapStop(
+          label: 'Rider',
+          point: LatLng(riderPosition!.latitude, riderPosition!.longitude),
+          color: AppTheme.brandYellow,
+          icon: Icons.two_wheeler_rounded,
+        ),
+      if (delivery.pickupLatitude != null &&
+          delivery.pickupLongitude != null)
+        _MapStop(
+          label: 'Store',
+          point: LatLng(
+            delivery.pickupLatitude!,
+            delivery.pickupLongitude!,
+          ),
+          color: AppTheme.brand,
+          icon: Icons.storefront_rounded,
+        ),
+      if (delivery.dropLatitude != null && delivery.dropLongitude != null)
+        _MapStop(
+          label: 'Drop',
+          point: LatLng(delivery.dropLatitude!, delivery.dropLongitude!),
+          color: AppTheme.error,
+          icon: Icons.location_on_rounded,
+        ),
+    ];
+    final points = stops.map((stop) => stop.point).toList(growable: false);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                const Icon(Icons.route_rounded, color: AppTheme.brand),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Live route', style: AppTheme.cardTitle),
+                ),
+                if (riderPosition == null)
+                  const Text(
+                    'Rider GPS unavailable',
+                    style: AppTheme.smallStatus,
+                  ),
+              ],
+            ),
+          ),
+          if (points.length >= 2)
+            SizedBox(
+              height: 240,
+              child: FlutterMap(
+                key: const ValueKey('delivery-route-map'),
+                options: MapOptions(
+                  initialCenter: _center(points),
+                  initialZoom: _zoom(points),
+                  minZoom: 3,
+                  maxZoom: 18,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: _tileUrlTemplate,
+                    userAgentPackageName: 'com.myshopzy.rider',
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: points,
+                        color: AppTheme.brand,
+                        strokeWidth: 5,
+                        borderColor: Colors.white,
+                        borderStrokeWidth: 2,
+                      ),
+                    ],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      for (final stop in stops)
+                        Marker(
+                          point: stop.point,
+                          width: 70,
+                          height: 58,
+                          alignment: Alignment.bottomCenter,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: stop.color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x33000000),
+                                      blurRadius: 5,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  stop.icon,
+                                  size: 17,
+                                  color: stop.color == AppTheme.brandYellow
+                                      ? AppTheme.darkGreen
+                                      : Colors.white,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  stop.label,
+                                  style: const TextStyle(
+                                    color: AppTheme.primaryText,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution('© OpenStreetMap contributors'),
+                    ],
+                  ),
+                ],
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: Text(
+                'Route map is unavailable because store or customer coordinates are missing.',
+                style: AppTheme.secondaryTextStyle,
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 9, 14, 12),
+            child: Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              children: [
+                for (final stop in stops)
+                  _RouteLegendItem(label: stop.label, color: stop.color),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static LatLng _center(List<LatLng> points) {
+    final latitude =
+        points.map((point) => point.latitude).reduce((a, b) => a + b) /
+        points.length;
+    final longitude =
+        points.map((point) => point.longitude).reduce((a, b) => a + b) /
+        points.length;
+    return LatLng(latitude, longitude);
+  }
+
+  static double _zoom(List<LatLng> points) {
+    final latitudes = points.map((point) => point.latitude);
+    final longitudes = points.map((point) => point.longitude);
+    final latitudeSpan = latitudes.reduce(math.max) - latitudes.reduce(math.min);
+    final longitudeSpan =
+        (longitudes.reduce(math.max) - longitudes.reduce(math.min)) *
+        math.cos(_center(points).latitude * math.pi / 180);
+    final span = math.max(latitudeSpan, longitudeSpan).clamp(0.001, 360);
+    return (math.log(360 / span) / math.ln2 - 1).clamp(3, 16).toDouble();
+  }
+}
+
+class _MapStop {
+  const _MapStop({
+    required this.label,
+    required this.point,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final LatLng point;
+  final Color color;
+  final IconData icon;
+}
+
+class _RouteLegendItem extends StatelessWidget {
+  const _RouteLegendItem({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: AppTheme.smallStatus),
+    ],
+  );
+}
+
+class _SyncPendingNotice extends StatelessWidget {
+  const _SyncPendingNotice({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    color: AppTheme.brandSoft,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const Icon(Icons.sync_rounded, color: AppTheme.brand),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count order update${count == 1 ? '' : 's'} saved offline. '
+              'They will sync when your connection returns.',
+              style: AppTheme.bodyText,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

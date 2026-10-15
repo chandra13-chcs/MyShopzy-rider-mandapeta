@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const brand = Color(0xFF16834A);
-  static const darkGreen = Color(0xFF004225);
-  static const brandYellow = Color(0xFFFFD51E);
-  static const appBackground = Color(0xFFFFF9F2);
+  static const brand = Color(0xFF2E7D32);
+  static const darkGreen = Color(0xFF1B5E20);
+  static const brandYellow = Color(0xFFFFC107);
+  static const appBackground = Color(0xFFF7FAF7);
   static const background = appBackground;
-  static const surface = Color(0xFFFCFDFC);
-  static const fieldSurface = Color(0xFFF7F4ED);
+  static const surface = Color(0xFFFFFFFF);
+  static const fieldSurface = Color(0xFFF7FAF7);
   static const lightGreenSurface = Color(0xFFEFF8F4);
   static const onlineBox = Color(0xFFFFFFFF);
-  static const summaryCard = Color(0xFFD8C9A8);
+  static const summaryCard = Color(0xFFE8F5E9);
   static const currentDeliveryCard = Color(0xFFFFFFFF);
-  static const performanceTile = Color(0xFFC7D3C0);
+  static const performanceTile = Color(0xFFE8F5E9);
   static const primaryText = Color(0xFF202321);
   static const secondaryText = Color(0xFF777C79);
   static const success = brand;
-  static const warning = Color(0xFFB7791F);
+  static const warning = Color(0xFF9A6700);
   static const error = Color(0xFFB42318);
   static const errorSoft = Color(0xFFFFE8E6);
   static const divider = Color(0xFFE2EAE5);

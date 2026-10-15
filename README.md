@@ -26,6 +26,24 @@ on local online status and network connectivity; polling resumes when
 connectivity returns. Android permits cleartext traffic only in debug builds;
 use an HTTPS API URL for release builds and physical-device testing.
 
+When connected to the rider API, going on duty requires a valid foreground
+location fix and streams subsequent fixes to the backend. Available-order
+polling is gated on duty, connectivity, and a successful location update.
+Incoming offers stay open for 30 seconds; accepting starts the pickup workflow.
+Pickup, out-for-delivery, and delivered transitions are confirmed by the API.
+Navigation opens external map directions, while customer call/SMS actions are
+enabled only after the order is accepted and a phone number is returned.
+Completed deliveries update the backend settlement record and refresh the
+daily earnings summary.
+
+GPS fixes and order status updates that fail because of lost connectivity are
+kept in an in-memory retry queue and flushed when connectivity returns. These
+queued updates do not survive an app process restart. The delivery view uses
+OpenStreetMap tiles by default and draws the rider-to-store-to-customer route;
+configure a compatible production tile source with
+`--dart-define=RIDER_MAP_TILE_URL=https://tiles.example/{z}/{x}/{y}.png`.
+Follow the selected tile provider's usage and attribution requirements.
+
 ## Run
 
 ```sh
