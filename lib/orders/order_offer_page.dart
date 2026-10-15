@@ -61,6 +61,16 @@ class OrderOfferPage extends StatelessWidget {
 
   Widget _buildOffer(BuildContext context) {
     final delivery = offerStore.offer;
+    if (delivery == null) {
+      return Center(
+        child: Text(
+          offerStore.errorMessage ??
+              (offerStore.isLoadingOffers
+                  ? 'Checking for available orders...'
+                  : 'No delivery offers are available right now.'),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -103,7 +113,9 @@ class OrderOfferPage extends StatelessWidget {
                   icon: Icons.store_mall_directory_outlined,
                   label: 'Pickup',
                   value: delivery.pickup,
-                  distance: '${delivery.pickupDistanceKm} km away',
+                  distance: delivery.pickupDistanceKm == null
+                      ? null
+                      : '${delivery.pickupDistanceLabel} away',
                 ),
                 const Padding(
                   padding: EdgeInsets.only(left: 10),
@@ -133,19 +145,17 @@ class OrderOfferPage extends StatelessWidget {
                     _OfferMetric(
                       icon: Icons.route_outlined,
                       label: 'Pickup distance',
-                      value:
-                          '${delivery.pickupDistanceKm?.toStringAsFixed(1) ?? '0.0'} km',
+                      value: delivery.pickupDistanceLabel,
                     ),
                     _OfferMetric(
                       icon: Icons.route_outlined,
                       label: 'Delivery distance',
-                      value:
-                          '${delivery.effectiveDeliveryDistance.toStringAsFixed(1)} km',
+                      value: delivery.deliveryDistanceLabel,
                     ),
                     _OfferMetric(
                       icon: Icons.route_outlined,
                       label: 'Total distance',
-                      value: '${delivery.distanceKm.toStringAsFixed(1)} km',
+                      value: delivery.totalDistanceLabel,
                     ),
                     _OfferMetric(
                       icon: Icons.two_wheeler_outlined,
@@ -218,8 +228,20 @@ class OrderOfferPage extends StatelessWidget {
               child: FilledButton(
                 onPressed: offerStore.canAccept
                     ? () async {
-                        if (!offerStore.acceptOffer()) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        final messenger = ScaffoldMessenger.of(context);
+                        final accepted = await offerStore
+                            .acceptAvailableOffer();
+                        if (!context.mounted) return;
+                        if (!accepted) {
+                          final message =
+                              offerStore.errorMessage ??
+                              'This order is no longer available.';
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(message)),
+                          );
+                          return;
+                        }
+                        messenger.showSnackBar(
                           const SnackBar(content: Text('Offer accepted')),
                         );
                         final completed = await Navigator.of(context)
@@ -232,8 +254,8 @@ class OrderOfferPage extends StatelessWidget {
                               ),
                             );
                         if (!context.mounted) return;
-                        if (completed == true) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                        if (context.mounted && completed == true) {
+                          messenger.showSnackBar(
                             const SnackBar(
                               content: Text('Delivery marked complete'),
                             ),

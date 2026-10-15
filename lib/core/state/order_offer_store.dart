@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/demo_delivery.dart';
+import '../network/rider_api_client.dart';
 import 'availability_store.dart';
 
 enum OrderOfferStatus { noOffer, available, accepted, rejected, expired }
@@ -40,29 +41,40 @@ class OrderOfferStore extends ChangeNotifier {
   OrderOfferStore({
     required this.availabilityStore,
     DemoDelivery? activeDelivery = DemoDelivery.batchThreeActive,
-    this.offer = DemoDelivery.newOffer,
+    DemoDelivery? offer = DemoDelivery.newOffer,
+    this.apiClient,
     this.offerDuration = const Duration(seconds: 20),
   }) : activeDelivery = activeDelivery,
+       offer = offer,
        pickupStatus = activeDelivery == null
            ? PickupStatus.goingToPickup
            : PickupStatus.onTheWay,
        deliveryStatus = DeliveryStatus.goingToCustomer,
+       status = offer == null
+           ? OrderOfferStatus.noOffer
+           : OrderOfferStatus.available,
        secondsRemaining = offerDuration.inSeconds {
     availabilityStore.addListener(_handleAvailabilityChanged);
     _updateTimer();
   }
 
   final AvailabilityStore availabilityStore;
-  final DemoDelivery offer;
+  final RiderApiClient? apiClient;
   final Duration offerDuration;
 
+  DemoDelivery? offer;
   DemoDelivery? activeDelivery;
   PickupStatus pickupStatus;
   DeliveryStatus deliveryStatus;
-  OrderOfferStatus status = OrderOfferStatus.available;
+  OrderOfferStatus status;
   int secondsRemaining;
+  String? errorMessage;
+  bool isLoadingOffers = false;
+  bool isAccepting = false;
   Timer? _timer;
+  Timer? _pollTimer;
   bool _disposed = false;
+  final Set<String> _rejectedOrderIds = {};
 
   bool get isBusy => activeDelivery != null;
 
@@ -71,15 +83,85 @@ class OrderOfferStore extends ChangeNotifier {
       : pickupStatus.label;
 
   bool get canShowOffer =>
-      availabilityStore.isAvailable &&
+      availabilityStore.isOnlineForOrders &&
       activeDelivery == null &&
-      status == OrderOfferStatus.available;
+      status == OrderOfferStatus.available &&
+      offer != null;
 
-  bool get canAccept => canShowOffer && secondsRemaining > 0;
+  bool get canAccept =>
+      canShowOffer && secondsRemaining > 0 && !isAccepting;
 
   void _handleAvailabilityChanged() {
+    if (apiClient != null) {
+      if (availabilityStore.isOnlineForOrders) {
+        unawaited(refreshAvailableOrders());
+        _startPolling();
+      } else {
+        _pollTimer?.cancel();
+        _pollTimer = null;
+        if (activeDelivery == null && !isAccepting) {
+          offer = null;
+          status = OrderOfferStatus.noOffer;
+          _timer?.cancel();
+          _timer = null;
+        }
+      }
+    }
     _updateTimer();
     notifyListeners();
+  }
+
+  void _startPolling() {
+    if (_pollTimer != null) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      unawaited(refreshAvailableOrders());
+    });
+  }
+
+  Future<void> refreshAvailableOrders() async {
+    final client = apiClient;
+    if (client == null ||
+        !availabilityStore.isOnlineForOrders ||
+        activeDelivery != null ||
+        isLoadingOffers ||
+        (offer != null && status == OrderOfferStatus.available)) {
+      return;
+    }
+
+    isLoadingOffers = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final orders = await client.getAvailableOrders();
+      if (_disposed || !availabilityStore.isOnlineForOrders) return;
+      DemoDelivery? nextOffer;
+      for (final order in orders) {
+        if (!_rejectedOrderIds.contains(order.orderId)) {
+          nextOffer = order;
+          break;
+        }
+      }
+      offer = nextOffer;
+      status = nextOffer == null
+          ? OrderOfferStatus.noOffer
+          : OrderOfferStatus.available;
+      secondsRemaining = offerDuration.inSeconds;
+      _updateTimer();
+    } on Object catch (error) {
+      if (error is RiderApiException && error.statusCode == 0) {
+        availabilityStore.setConnectivityAvailable(false);
+      }
+      if (!_disposed) {
+        offer = null;
+        status = OrderOfferStatus.noOffer;
+        errorMessage = error is RiderApiException
+            ? error.message
+            : 'Unable to load available orders.';
+      }
+    } finally {
+      isLoadingOffers = false;
+      if (!_disposed) notifyListeners();
+    }
   }
 
   void _updateTimer() {
@@ -94,8 +176,14 @@ class OrderOfferStore extends ChangeNotifier {
       if (secondsRemaining <= 1) {
         secondsRemaining = 0;
         status = OrderOfferStatus.expired;
+        final expiredOrderId = offer?.orderId;
+        if (expiredOrderId != null && apiClient != null) {
+          _rejectedOrderIds.add(expiredOrderId);
+          offer = null;
+        }
         _timer?.cancel();
         _timer = null;
+        if (apiClient != null) unawaited(refreshAvailableOrders());
       } else {
         secondsRemaining--;
       }
@@ -104,7 +192,7 @@ class OrderOfferStore extends ChangeNotifier {
   }
 
   bool acceptOffer() {
-    if (!canAccept) return false;
+    if (!canAccept || offer == null) return false;
 
     _timer?.cancel();
     _timer = null;
@@ -116,12 +204,60 @@ class OrderOfferStore extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> acceptAvailableOffer() async {
+    final client = apiClient;
+    final currentOffer = offer;
+    if (client == null) return acceptOffer();
+    if (!canAccept || currentOffer == null) return false;
+
+    isAccepting = true;
+    errorMessage = null;
+    _timer?.cancel();
+    _timer = null;
+    notifyListeners();
+    try {
+      await client.acceptOrder(currentOffer.orderId);
+      if (_disposed || offer?.orderId != currentOffer.orderId) return false;
+      isAccepting = false;
+      status = OrderOfferStatus.accepted;
+      activeDelivery = currentOffer;
+      pickupStatus = PickupStatus.goingToPickup;
+      deliveryStatus = DeliveryStatus.goingToCustomer;
+      notifyListeners();
+      return true;
+    } on Object catch (error) {
+      if (_disposed) return false;
+      isAccepting = false;
+      if (availabilityStore.isOnlineForOrders) {
+        status = OrderOfferStatus.available;
+        secondsRemaining = offerDuration.inSeconds;
+      } else {
+        offer = null;
+        status = OrderOfferStatus.noOffer;
+      }
+      if (error is RiderApiException && error.statusCode == 0) {
+        availabilityStore.setConnectivityAvailable(false);
+      }
+      errorMessage = error is RiderApiException
+          ? error.message
+          : 'Unable to accept this order.';
+      _updateTimer();
+      notifyListeners();
+      return false;
+    }
+  }
+
   bool rejectOffer() {
-    if (!canAccept) return false;
+    if (!canAccept || offer == null) return false;
 
     _timer?.cancel();
     _timer = null;
+    if (apiClient != null) {
+      _rejectedOrderIds.add(offer!.orderId);
+      offer = null;
+    }
     status = OrderOfferStatus.rejected;
+    if (apiClient != null) unawaited(refreshAvailableOrders());
     notifyListeners();
     return true;
   }
@@ -135,11 +271,17 @@ class OrderOfferStore extends ChangeNotifier {
 
     _timer?.cancel();
     _timer = null;
+    final orderId = delivery.orderId;
     deliveryStatus = DeliveryStatus.delivered;
     activeDelivery = null;
     pickupStatus = PickupStatus.goingToPickup;
     status = OrderOfferStatus.noOffer;
     secondsRemaining = offerDuration.inSeconds;
+    if (apiClient != null) {
+      _updateRemoteStatus(orderId, 'delivered');
+      offer = null;
+      unawaited(refreshAvailableOrders());
+    }
     notifyListeners();
     return true;
   }
@@ -172,6 +314,7 @@ class OrderOfferStore extends ChangeNotifier {
     }
 
     pickupStatus = PickupStatus.pickedUp;
+    _updateRemoteStatus(delivery.orderId, 'picked_up');
     notifyListeners();
     return true;
   }
@@ -247,7 +390,25 @@ class OrderOfferStore extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _pollTimer?.cancel();
     availabilityStore.removeListener(_handleAvailabilityChanged);
     super.dispose();
+  }
+
+  void _updateRemoteStatus(String orderId, String nextStatus) {
+    final client = apiClient;
+    if (client == null) return;
+    unawaited(
+      client
+          .updateOrderStatus(orderId, nextStatus)
+          .catchError((Object error) {
+            if (_disposed) return <String, dynamic>{};
+            errorMessage = error is RiderApiException
+                ? error.message
+                : 'Unable to update the order status.';
+            notifyListeners();
+            return <String, dynamic>{};
+          }),
+    );
   }
 }

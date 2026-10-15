@@ -18,6 +18,7 @@ class IncomingOrderOfferDialog extends StatelessWidget {
       animation: offerStore,
       builder: (context, child) {
         final delivery = offerStore.offer;
+        if (delivery == null) return const SizedBox.shrink();
         final size = MediaQuery.sizeOf(context);
 
         return Dialog(
@@ -117,12 +118,18 @@ class IncomingOrderOfferDialog extends StatelessWidget {
                             _DistancePill(
                               label: 'Delivery',
                               value: _formatDistance(
-                                delivery.effectiveDeliveryDistance,
+                                delivery.hasRouteEstimate
+                                    ? delivery.effectiveDeliveryDistance
+                                    : null,
                               ),
                             ),
                             _DistancePill(
                               label: 'Total',
-                              value: _formatDistance(delivery.distanceKm),
+                              value: _formatDistance(
+                                delivery.hasRouteEstimate
+                                    ? delivery.distanceKm
+                                    : null,
+                              ),
                             ),
                           ],
                         ),
@@ -189,9 +196,17 @@ class IncomingOrderOfferDialog extends StatelessWidget {
     );
   }
 
-  void _accept(BuildContext context) {
-    if (offerStore.acceptOffer()) {
-      Navigator.of(context).pop(true);
+  Future<void> _accept(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final accepted = await offerStore.acceptAvailableOffer();
+    if (!context.mounted) return;
+    if (accepted) {
+      navigator.pop(true);
+    } else if (context.mounted && offerStore.errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(offerStore.errorMessage!)),
+      );
     }
   }
 

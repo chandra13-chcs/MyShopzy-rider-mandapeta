@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../core/state/availability_store.dart';
 import '../core/state/new_order_alert.dart';
 import '../core/state/order_offer_store.dart';
+import '../core/models/demo_delivery.dart';
+import '../core/network/rider_api_client.dart';
 import '../delivery/delivery_page.dart';
 import '../earnings/earnings_page.dart';
 import '../gigs/gigs_page.dart';
@@ -15,7 +17,9 @@ import '../orders/orders_page.dart';
 import '../profile/profile_page.dart';
 
 class RiderShell extends StatefulWidget {
-  const RiderShell({super.key});
+  const RiderShell({this.apiClient, super.key});
+
+  final RiderApiClient? apiClient;
 
   @override
   State<RiderShell> createState() => _RiderShellState();
@@ -27,10 +31,19 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   bool _incomingDialogShowing = false;
   String? _presentedOfferId;
 
-  late final _availabilityStore = AvailabilityStore();
+  late final _availabilityStore = AvailabilityStore(
+    initialStatus: widget.apiClient == null
+        ? AvailabilityStatus.available
+        : AvailabilityStatus.offline,
+    apiClient: widget.apiClient,
+  );
   late final _offerStore = OrderOfferStore(
     availabilityStore: _availabilityStore,
-    activeDelivery: HomeDemoData().activeDelivery,
+    activeDelivery: widget.apiClient == null
+        ? HomeDemoData().activeDelivery
+        : null,
+    offer: widget.apiClient == null ? DemoDelivery.newOffer : null,
+    apiClient: widget.apiClient,
   );
   late final _newOrderAlert = NewOrderAlert();
   late final _pages = [
@@ -47,7 +60,11 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _offerStore.addListener(_handleOfferStoreChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _handleOfferStoreChanged();
+      if (!mounted) return;
+      if (widget.apiClient != null) {
+        unawaited(_offerStore.refreshAvailableOrders());
+      }
+      _handleOfferStoreChanged();
     });
   }
 
@@ -55,6 +72,9 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isForeground = state == AppLifecycleState.resumed;
     if (_isForeground) {
+      if (widget.apiClient != null) {
+        unawaited(_offerStore.refreshAvailableOrders());
+      }
       _handleOfferStoreChanged();
     } else {
       unawaited(_newOrderAlert.stop());
@@ -82,7 +102,8 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
 
     if (!_isForeground) return;
 
-    final orderId = _offerStore.offer.orderId;
+    final orderId = _offerStore.offer?.orderId;
+    if (orderId == null) return;
     _newOrderAlert.start(orderId);
     if (_incomingDialogShowing || _presentedOfferId == orderId) return;
 
@@ -94,7 +115,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showIncomingOffer(String orderId) async {
-    if (!_offerStore.canShowOffer || _offerStore.offer.orderId != orderId) {
+    if (!_offerStore.canShowOffer || _offerStore.offer?.orderId != orderId) {
       _incomingDialogShowing = false;
       return;
     }

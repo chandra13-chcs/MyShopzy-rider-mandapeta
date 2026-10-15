@@ -52,7 +52,7 @@ class DeliveryPage extends StatelessWidget {
           Text('Order ${delivery.orderId}', style: AppTheme.screenTitle),
           const SizedBox(height: 5),
           Text(
-            'Grocery delivery · ${delivery.distanceKm.toStringAsFixed(1)} km',
+            'Grocery delivery · ${delivery.totalDistanceLabel}',
             style: AppTheme.secondaryTextStyle,
           ),
           const SizedBox(height: 20),
@@ -273,7 +273,7 @@ class DeliveryPage extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   'Delivery distance: '
-                  '${(delivery.deliveryDistanceKm ?? delivery.distanceKm).toStringAsFixed(1)} km',
+                  '${delivery.deliveryDistanceLabel}',
                 ),
                 const SizedBox(height: 4),
                 Text('Payout: ₹${delivery.payout}'),

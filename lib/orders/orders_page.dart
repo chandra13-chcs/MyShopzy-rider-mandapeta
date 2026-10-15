@@ -122,6 +122,7 @@ class OrdersPage extends StatelessWidget {
 
   Widget _buildAvailableOffer(BuildContext context) {
     final delivery = offerStore.offer;
+    if (delivery == null) return const SizedBox.shrink();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -157,7 +158,7 @@ class OrdersPage extends StatelessWidget {
               runSpacing: 8,
               children: [
                 Text(
-                  '${delivery.distanceKm.toStringAsFixed(1)} km',
+                  delivery.totalDistanceLabel,
                   style: AppTheme.bodyText.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

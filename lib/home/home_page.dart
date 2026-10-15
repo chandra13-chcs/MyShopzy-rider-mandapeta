@@ -182,6 +182,15 @@ class _HomePageState extends State<HomePage> {
                         : "You're not available for new delivery offers.",
                     style: AppTheme.secondaryTextStyle,
                   ),
+                  if (widget.availabilityStore.lastError case final message?) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      message,
+                      style: AppTheme.secondaryTextStyle.copyWith(
+                        color: AppTheme.error,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -246,6 +255,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildNewOrder() {
     final offer = widget.offerStore.offer;
+    if (offer == null) return const SizedBox.shrink();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -271,17 +281,16 @@ class _HomePageState extends State<HomePage> {
             _OfferSummaryRow(label: 'Pickup', value: offer.pickup),
             _OfferSummaryRow(
               label: 'Pickup distance',
-              value:
-                  '${offer.pickupDistanceKm?.toStringAsFixed(1) ?? '1.8'} km',
+              value: offer.pickupDistanceLabel,
             ),
             _OfferSummaryRow(label: 'Drop', value: offer.drop),
             _OfferSummaryRow(
               label: 'Delivery distance',
-              value: '${offer.effectiveDeliveryDistance.toStringAsFixed(1)} km',
+              value: offer.deliveryDistanceLabel,
             ),
             _OfferSummaryRow(
               label: 'Total distance',
-              value: '${offer.distanceKm.toStringAsFixed(1)} km',
+              value: offer.totalDistanceLabel,
             ),
             _OfferSummaryRow(
               label: 'Payout breakdown',
@@ -321,7 +330,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _acceptOffer(DemoDelivery delivery) async {
-    if (!widget.offerStore.acceptOffer()) return;
+    final accepted = await widget.offerStore.acceptAvailableOffer();
+    if (!mounted) return;
+    if (!accepted) {
+      final message =
+          widget.offerStore.errorMessage ?? 'This order is no longer available.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
     await _openDeliveryPage(delivery);
   }
 
@@ -372,6 +390,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildWaitingState() {
     final isAvailable = widget.availabilityStore.isAvailable;
+    final message = widget.offerStore.errorMessage;
     return Card(
       child: ListTile(
         leading: Icon(
@@ -383,10 +402,15 @@ class _HomePageState extends State<HomePage> {
           style: AppTheme.cardTitle,
         ),
         subtitle: Text(
-          isAvailable
-              ? 'A new order will appear here.'
-              : 'Go online to receive new orders.',
-          style: AppTheme.secondaryTextStyle,
+          message ??
+              (widget.offerStore.isLoadingOffers
+                  ? 'Checking for available orders...'
+                  : isAvailable
+                  ? 'A new order will appear here.'
+                  : 'Go online to receive new orders.'),
+          style: AppTheme.secondaryTextStyle.copyWith(
+            color: message == null ? null : AppTheme.error,
+          ),
         ),
       ),
     );
