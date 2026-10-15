@@ -57,9 +57,12 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   int? _startingGeneration;
   bool _locationTrackingRequested = false;
   bool _isFlushingLocations = false;
+  bool _isFlushingAvailability = false;
+  bool? _queuedAvailabilityUpdate;
   bool isConnected = true;
   Position? get lastPosition => _lastPosition;
   bool _hasPostedLocation = false;
+  bool get hasQueuedAvailabilityUpdate => _queuedAvailabilityUpdate != null;
   static const double overspeedLimitKmh = 50;
   double? speedKmh;
   bool isOverspeeding = false;
@@ -96,6 +99,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
     final connected = !results.contains(ConnectivityResult.none);
     final wasConnected = isConnected;
     setConnectivityAvailable(connected);
+    if (connected) unawaited(_flushQueuedAvailability());
     if (connected &&
         !wasConnected &&
         isAvailable &&
@@ -119,6 +123,8 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       if (isAvailable && _locationTrackingRequested) {
         lastError = 'Connection lost. Your latest location will sync when connected.';
       }
+    } else {
+      unawaited(_flushQueuedAvailability());
     }
     notifyListeners();
   }
@@ -134,6 +140,8 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       speedKmh = null;
       isOverspeeding = false;
       _pendingLocation = null;
+    } else {
+      _queuedAvailabilityUpdate = null;
     }
     value = nextValue;
     if (apiClient == null) return;
@@ -278,8 +286,31 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       SystemSound.play(SystemSoundType.alert);
 
   Future<void> _setRemoteOffline() async {
+    _queuedAvailabilityUpdate = false;
+    if (!isConnected) {
+      lastError = 'Duty status saved offline. It will sync when connected.';
+      notifyListeners();
+      return;
+    }
+    await _flushQueuedAvailability();
+  }
+
+  Future<void> _flushQueuedAvailability() async {
+    if (_isFlushingAvailability ||
+        _queuedAvailabilityUpdate == null ||
+        !isConnected ||
+        apiClient == null) {
+      return;
+    }
+
+    _isFlushingAvailability = true;
     try {
-      await apiClient!.updateAvailability(false);
+      final requestedAvailability = _queuedAvailabilityUpdate!;
+      await apiClient!.updateAvailability(requestedAvailability);
+      if (_queuedAvailabilityUpdate == requestedAvailability) {
+        _queuedAvailabilityUpdate = null;
+        lastError = null;
+      }
     } on Object catch (error) {
       if (error is RiderApiException && error.statusCode == 0) {
         setConnectivityAvailable(false);
@@ -287,6 +318,8 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       lastError = error is RiderApiException
           ? error.message
           : 'Unable to update your duty status.';
+    } finally {
+      _isFlushingAvailability = false;
       notifyListeners();
     }
   }

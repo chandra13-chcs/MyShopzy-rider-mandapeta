@@ -472,8 +472,14 @@ void main() {
       offer: delivery,
     );
     expect(store.acceptOffer(), isTrue);
+    expect(store.pickupStatus, PickupStatus.goingToPickup);
+    expect(store.activeDelivery?.storePhone, '+911098765432');
     addTearDown(store.dispose);
     addTearDown(availability.dispose);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 2000);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -481,11 +487,6 @@ void main() {
       ),
     );
     expect(find.byKey(const ValueKey('delivery-route-map')), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Call Store'),
-      250,
-      scrollable: find.byType(Scrollable),
-    );
     expect(find.text('Call Store'), findsOneWidget);
     expect(find.text('Rider GPS unavailable'), findsOneWidget);
 
@@ -494,11 +495,6 @@ void main() {
     expect(store.verifyPickup(delivery, '1234'), isTrue);
     expect(store.continueToDelivery(delivery), isTrue);
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.text('Call'),
-      250,
-      scrollable: find.byType(Scrollable),
-    );
     expect(find.text('Call'), findsOneWidget);
   });
 
