@@ -81,11 +81,13 @@ class OrderOfferStore extends ChangeNotifier {
   Timer? _pollTimer;
   bool _disposed = false;
   bool _isFlushingQueuedStatuses = false;
+  int _offerRevision = 0;
   final List<({String orderId, String status})> _queuedOrderStatuses = [];
   final Set<String> _rejectedOrderIds = {};
 
   bool get isBusy => activeDelivery != null;
   int get queuedOrderStatusCount => _queuedOrderStatuses.length;
+  int get offerRevision => _offerRevision;
 
   String get activeDeliveryStatus => pickupStatus == PickupStatus.onTheWay
       ? deliveryStatus.label
@@ -98,7 +100,11 @@ class OrderOfferStore extends ChangeNotifier {
       offer != null;
 
   bool get canAccept =>
-      canShowOffer && secondsRemaining > 0 && !isAccepting;
+      availabilityStore.isAvailable &&
+      availabilityStore.isConnected &&
+      canShowOffer &&
+      secondsRemaining > 0 &&
+      !isAccepting;
 
   void _handleAvailabilityChanged() {
     if (apiClient != null) {
@@ -154,6 +160,7 @@ class OrderOfferStore extends ChangeNotifier {
         }
       }
       offer = nextOffer;
+      if (nextOffer != null) _offerRevision++;
       status = nextOffer == null
           ? OrderOfferStatus.noOffer
           : OrderOfferStatus.available;

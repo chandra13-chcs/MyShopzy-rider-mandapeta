@@ -83,66 +83,55 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHeader() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 110,
-          height: 36,
-          child: Row(
-            children: [
-              Image.asset(
-                'assets/sounds/logo.png',
-                fit: BoxFit.contain,
-                width: 36,
-                height: 36,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/sounds/logo.png',
+              fit: BoxFit.contain,
+              width: 36,
+              height: 36,
+            ),
+            const SizedBox(width: 4),
+            const Text(
+              'MyShopzy',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppTheme.darkGreen,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Text(
-                  'MyShopzy',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          widget.demoData.greeting,
+          style: const TextStyle(
+            color: AppTheme.primaryText,
+            fontSize: 16,
+            fontWeight: FontWeight.w400,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.demoData.greeting,
-                style: const TextStyle(
-                  color: AppTheme.primaryText,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.demoData.riderName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppTheme.primaryText,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Rider ID: ${widget.demoData.riderId}',
-                style: AppTheme.secondaryTextStyle,
-              ),
-            ],
+        const SizedBox(height: 2),
+        Text(
+          widget.demoData.riderName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppTheme.primaryText,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
           ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Rider ID: ${widget.demoData.riderId}',
+          style: AppTheme.secondaryTextStyle,
         ),
       ],
     );
@@ -440,7 +429,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: AppTheme.summaryCard,
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(

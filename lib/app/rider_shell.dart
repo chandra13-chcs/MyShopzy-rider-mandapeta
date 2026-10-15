@@ -30,7 +30,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   bool _isForeground = true;
   bool _incomingDialogShowing = false;
-  String? _presentedOfferId;
+  String? _presentedOfferToken;
 
   late final _availabilityStore = AvailabilityStore(
     initialStatus: widget.apiClient == null
@@ -87,7 +87,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     if (!_offerStore.canShowOffer) {
       unawaited(_newOrderAlert.stop());
       if (_offerStore.status != OrderOfferStatus.available) {
-        _presentedOfferId = null;
+        _presentedOfferToken = null;
       }
       if (_incomingDialogShowing &&
           _offerStore.status != OrderOfferStatus.accepted &&
@@ -106,17 +106,18 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
 
     final orderId = _offerStore.offer?.orderId;
     if (orderId == null) return;
-    _newOrderAlert.start(orderId);
-    if (_incomingDialogShowing || _presentedOfferId == orderId) return;
+    final offerToken = '$orderId:${_offerStore.offerRevision}';
+    _newOrderAlert.start(offerToken);
+    if (_incomingDialogShowing || _presentedOfferToken == offerToken) return;
 
-    _presentedOfferId = orderId;
+    _presentedOfferToken = offerToken;
     _incomingDialogShowing = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _showIncomingOffer(orderId);
+      if (mounted) _showIncomingOffer(orderId, offerToken);
     });
   }
 
-  Future<void> _showIncomingOffer(String orderId) async {
+  Future<void> _showIncomingOffer(String orderId, String offerToken) async {
     if (!_offerStore.canShowOffer || _offerStore.offer?.orderId != orderId) {
       _incomingDialogShowing = false;
       return;
@@ -128,6 +129,9 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
       builder: (_) => IncomingOrderOfferDialog(offerStore: _offerStore),
     );
     _incomingDialogShowing = false;
+    if (_presentedOfferToken == offerToken) {
+      _presentedOfferToken = null;
+    }
 
     if (!mounted || accepted != true) return;
     final delivery = _offerStore.activeDelivery;
