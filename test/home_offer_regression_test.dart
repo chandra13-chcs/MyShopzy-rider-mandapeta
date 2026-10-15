@@ -59,6 +59,42 @@ void main() {
     },
   );
 
+  test('rechecks connectivity after notifying accepting state', () async {
+    var acceptRequests = 0;
+    final client = RiderApiClient.forTesting(
+      baseUri: Uri.parse('http://localhost:3000'),
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/accept')) acceptRequests++;
+        return http.Response(jsonEncode({'data': {}}), 200);
+      }),
+    );
+    final availability = AvailabilityStore(
+      initialStatus: AvailabilityStatus.available,
+      checkConnectivity: () async => [ConnectivityResult.wifi],
+      connectivityChanges: const Stream<List<ConnectivityResult>>.empty(),
+    );
+    await availability.refreshConnectivity();
+    final store = OrderOfferStore(
+      availabilityStore: availability,
+      activeDelivery: null,
+      offer: DemoDelivery.newOffer,
+      apiClient: client,
+    );
+    var disconnected = false;
+    store.addListener(() {
+      if (store.isAccepting && !disconnected) {
+        disconnected = true;
+        availability.setConnectivityAvailable(false);
+      }
+    });
+    addTearDown(store.dispose);
+    addTearDown(availability.dispose);
+
+    expect(await store.acceptAvailableOffer(), isFalse);
+    expect(acceptRequests, 0);
+    expect(store.offer, isNull);
+  });
+
   test(
     'assigns a fresh alert revision for every subsequent order offer',
     () async {

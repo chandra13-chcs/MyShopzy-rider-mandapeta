@@ -120,6 +120,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   Future<void> _showIncomingOffer(String orderId, String offerToken) async {
     if (!_offerStore.canShowOffer || _offerStore.offer?.orderId != orderId) {
       _incomingDialogShowing = false;
+      _handleOfferStoreChanged();
       return;
     }
 
@@ -133,7 +134,9 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
       _presentedOfferToken = null;
     }
 
-    if (!mounted || accepted != true) return;
+    if (!mounted) return;
+    _handleOfferStoreChanged();
+    if (accepted != true) return;
     final delivery = _offerStore.activeDelivery;
     if (delivery == null) return;
 

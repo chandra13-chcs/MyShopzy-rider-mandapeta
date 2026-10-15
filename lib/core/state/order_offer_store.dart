@@ -99,12 +99,14 @@ class OrderOfferStore extends ChangeNotifier {
       status == OrderOfferStatus.available &&
       offer != null;
 
-  bool get canAccept =>
-      availabilityStore.isAvailable &&
-      availabilityStore.isConnected &&
-      canShowOffer &&
-      secondsRemaining > 0 &&
-      !isAccepting;
+  bool get canAccept => _hasAcceptableOffer && !isAccepting;
+
+  bool get _hasAcceptableOffer =>
+      availabilityStore.isOnlineForOrders &&
+      activeDelivery == null &&
+      status == OrderOfferStatus.available &&
+      offer != null &&
+      secondsRemaining > 0;
 
   void _handleAvailabilityChanged() {
     if (apiClient != null) {
@@ -234,6 +236,19 @@ class OrderOfferStore extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     notifyListeners();
+    if (_disposed) return false;
+    if (!_hasAcceptableOffer || offer?.orderId != currentOffer.orderId) {
+      isAccepting = false;
+      if (!availabilityStore.isOnlineForOrders) {
+        offer = null;
+        status = OrderOfferStatus.noOffer;
+        errorMessage = 'Connection lost. Reconnect before accepting an order.';
+      }
+      _updateTimer();
+      notifyListeners();
+      return false;
+    }
+
     try {
       final response = await client.acceptOrder(currentOffer.orderId);
       if (_disposed || offer?.orderId != currentOffer.orderId) return false;
@@ -441,7 +456,8 @@ class OrderOfferStore extends ChangeNotifier {
 
   DemoDelivery _estimateDistances(DemoDelivery delivery) {
     final riderPosition = availabilityStore.lastPosition;
-    final pickupDistance = riderPosition == null ||
+    final pickupDistance =
+        riderPosition == null ||
             delivery.pickupLatitude == null ||
             delivery.pickupLongitude == null
         ? null
@@ -451,7 +467,8 @@ class OrderOfferStore extends ChangeNotifier {
             delivery.pickupLatitude!,
             delivery.pickupLongitude!,
           );
-    final deliveryDistance = delivery.pickupLatitude == null ||
+    final deliveryDistance =
+        delivery.pickupLatitude == null ||
             delivery.pickupLongitude == null ||
             delivery.dropLatitude == null ||
             delivery.dropLongitude == null
@@ -606,8 +623,7 @@ class OrderOfferStore extends ChangeNotifier {
 
     _isFlushingQueuedStatuses = true;
     try {
-      while (_queuedOrderStatuses.isNotEmpty &&
-          availabilityStore.isConnected) {
+      while (_queuedOrderStatuses.isNotEmpty && availabilityStore.isConnected) {
         final queued = _queuedOrderStatuses.first;
         try {
           final response = await apiClient!.updateOrderStatus(
@@ -633,10 +649,7 @@ class OrderOfferStore extends ChangeNotifier {
     }
   }
 
-  void _recordDeliveredPayout(
-    String status,
-    Map<String, dynamic> response,
-  ) {
+  void _recordDeliveredPayout(String status, Map<String, dynamic> response) {
     if (status != 'delivered') return;
     final data = response['data'];
     final order = data is Map<String, dynamic> ? data['order'] : null;
