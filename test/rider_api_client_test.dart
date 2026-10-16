@@ -483,12 +483,16 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: DeliveryPage(delivery: delivery, offerStore: store),
+        home: DeliveryPage(
+          delivery: delivery,
+          offerStore: store,
+          showMapTiles: false,
+        ),
       ),
     );
     expect(find.byKey(const ValueKey('delivery-route-map')), findsOneWidget);
     expect(find.text('Call Store'), findsOneWidget);
-    expect(find.text('Rider GPS unavailable'), findsOneWidget);
+    expect(find.text('Locating rider...'), findsOneWidget);
 
     store.reachStore(delivery);
     store.openOrderDetails(delivery);

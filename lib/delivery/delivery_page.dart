@@ -1,8 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,16 +8,19 @@ import '../core/theme/app_theme.dart';
 import '../core/models/demo_delivery.dart';
 import '../core/state/order_offer_store.dart';
 import '../core/widgets/status_badge.dart';
+import '../orders/rider_map_view.dart';
 
 class DeliveryPage extends StatelessWidget {
   const DeliveryPage({
     this.delivery = DemoDelivery.batchThreeActive,
     this.offerStore,
+    this.showMapTiles = true,
     super.key,
   });
 
   final DemoDelivery delivery;
   final OrderOfferStore? offerStore;
+  final bool showMapTiles;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +70,7 @@ class DeliveryPage extends StatelessWidget {
             _RouteMapCard(
               delivery: delivery,
               riderPosition: store?.availabilityStore.lastPosition,
+              showMapTiles: showMapTiles,
             ),
             const SizedBox(height: 12),
           ],
@@ -187,10 +188,7 @@ class DeliveryPage extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-            _primaryAction(
-              'Reached Store',
-              () => store.reachStore(delivery),
-            ),
+            _primaryAction('Reached Store', () => store.reachStore(delivery)),
           ],
         );
       case PickupStatus.reachedPickup:
@@ -353,9 +351,8 @@ class DeliveryPage extends StatelessWidget {
     if (!completed) {
       final message =
           store.errorMessage ?? 'Unable to complete this delivery yet.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     final navigator = Navigator.of(context);
@@ -372,9 +369,8 @@ class DeliveryPage extends StatelessWidget {
     if (!context.mounted || completed) return;
     final message =
         offerStore?.errorMessage ?? 'Unable to update this order status.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _customerContactActions(BuildContext context) {
@@ -438,17 +434,14 @@ class DeliveryPage extends StatelessWidget {
       final message = error is StateError
           ? 'Unable to open the selected navigation or contact app.'
           : 'Unable to open the selected navigation or contact app.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
   Widget _primaryAction(String label, VoidCallback onPressed) {
     return FilledButton(
-      onPressed: offerStore?.isUpdatingOrderStatus == true
-          ? null
-          : onPressed,
+      onPressed: offerStore?.isUpdatingOrderStatus == true ? null : onPressed,
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 15),
       ),
@@ -631,46 +624,24 @@ class _StopCard extends StatelessWidget {
 }
 
 class _RouteMapCard extends StatelessWidget {
-  const _RouteMapCard({required this.delivery, required this.riderPosition});
-
-  static const _tileUrlTemplate = String.fromEnvironment(
-    'RIDER_MAP_TILE_URL',
-    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  );
+  const _RouteMapCard({
+    required this.delivery,
+    required this.riderPosition,
+    required this.showMapTiles,
+  });
 
   final DemoDelivery delivery;
   final Position? riderPosition;
+  final bool showMapTiles;
 
   @override
   Widget build(BuildContext context) {
-    final stops = <_MapStop>[
-      if (riderPosition != null)
-        _MapStop(
-          label: 'Rider',
-          point: LatLng(riderPosition!.latitude, riderPosition!.longitude),
-          color: AppTheme.brandYellow,
-          icon: Icons.two_wheeler_rounded,
-        ),
-      if (delivery.pickupLatitude != null &&
-          delivery.pickupLongitude != null)
-        _MapStop(
-          label: 'Store',
-          point: LatLng(
-            delivery.pickupLatitude!,
-            delivery.pickupLongitude!,
-          ),
-          color: AppTheme.brand,
-          icon: Icons.storefront_rounded,
-        ),
+    final routePoints = <LatLng>[
+      if (delivery.pickupLatitude != null && delivery.pickupLongitude != null)
+        LatLng(delivery.pickupLatitude!, delivery.pickupLongitude!),
       if (delivery.dropLatitude != null && delivery.dropLongitude != null)
-        _MapStop(
-          label: 'Drop',
-          point: LatLng(delivery.dropLatitude!, delivery.dropLongitude!),
-          color: AppTheme.error,
-          icon: Icons.location_on_rounded,
-        ),
+        LatLng(delivery.dropLatitude!, delivery.dropLongitude!),
     ];
-    final points = stops.map((stop) => stop.point).toList(growable: false);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -686,108 +657,24 @@ class _RouteMapCard extends StatelessWidget {
                 const Expanded(
                   child: Text('Live route', style: AppTheme.cardTitle),
                 ),
-                if (riderPosition == null)
-                  const Text(
-                    'Rider GPS unavailable',
-                    style: AppTheme.smallStatus,
-                  ),
+                Text(
+                  riderPosition == null ? 'Locating rider...' : 'Live tracking',
+                  style: AppTheme.smallStatus,
+                ),
               ],
             ),
           ),
-          if (points.length >= 2)
-            SizedBox(
+          if (routePoints.length >= 2)
+            RiderMapView(
+              key: const ValueKey('delivery-route-map'),
+              riderLocation: riderPosition == null
+                  ? null
+                  : LatLng(riderPosition!.latitude, riderPosition!.longitude),
+              showCurrentLocation: riderPosition == null,
+              pickupLocation: routePoints.first,
+              dropoffLocation: routePoints.last,
+              showTiles: showMapTiles,
               height: 240,
-              child: FlutterMap(
-                key: const ValueKey('delivery-route-map'),
-                options: MapOptions(
-                  initialCenter: _center(points),
-                  initialZoom: _zoom(points),
-                  minZoom: 3,
-                  maxZoom: 18,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: _tileUrlTemplate,
-                    userAgentPackageName: 'com.myshopzy.rider',
-                  ),
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: points,
-                        color: AppTheme.brand,
-                        strokeWidth: 5,
-                        borderColor: Colors.white,
-                        borderStrokeWidth: 2,
-                      ),
-                    ],
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      for (final stop in stops)
-                        Marker(
-                          point: stop.point,
-                          width: 70,
-                          height: 58,
-                          alignment: Alignment.bottomCenter,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: stop.color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x33000000),
-                                      blurRadius: 5,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  stop.icon,
-                                  size: 17,
-                                  color: stop.color == AppTheme.brandYellow
-                                      ? AppTheme.darkGreen
-                                      : Colors.white,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  stop.label,
-                                  style: const TextStyle(
-                                    color: AppTheme.primaryText,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  const RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution('© OpenStreetMap contributors'),
-                    ],
-                  ),
-                ],
-              ),
             )
           else
             const Padding(
@@ -803,8 +690,17 @@ class _RouteMapCard extends StatelessWidget {
               spacing: 14,
               runSpacing: 8,
               children: [
-                for (final stop in stops)
-                  _RouteLegendItem(label: stop.label, color: stop.color),
+                if (riderPosition != null)
+                  const _RouteLegendItem(label: 'Rider', color: AppTheme.brand),
+                if (delivery.pickupLatitude != null &&
+                    delivery.pickupLongitude != null)
+                  const _RouteLegendItem(label: 'Store', color: AppTheme.brand),
+                if (delivery.dropLatitude != null &&
+                    delivery.dropLongitude != null)
+                  const _RouteLegendItem(
+                    label: 'Drop-off',
+                    color: AppTheme.brandYellow,
+                  ),
               ],
             ),
           ),
@@ -812,41 +708,6 @@ class _RouteMapCard extends StatelessWidget {
       ),
     );
   }
-
-  static LatLng _center(List<LatLng> points) {
-    final latitude =
-        points.map((point) => point.latitude).reduce((a, b) => a + b) /
-        points.length;
-    final longitude =
-        points.map((point) => point.longitude).reduce((a, b) => a + b) /
-        points.length;
-    return LatLng(latitude, longitude);
-  }
-
-  static double _zoom(List<LatLng> points) {
-    final latitudes = points.map((point) => point.latitude);
-    final longitudes = points.map((point) => point.longitude);
-    final latitudeSpan = latitudes.reduce(math.max) - latitudes.reduce(math.min);
-    final longitudeSpan =
-        (longitudes.reduce(math.max) - longitudes.reduce(math.min)) *
-        math.cos(_center(points).latitude * math.pi / 180);
-    final span = math.max(latitudeSpan, longitudeSpan).clamp(0.001, 360);
-    return (math.log(360 / span) / math.ln2 - 1).clamp(3, 16).toDouble();
-  }
-}
-
-class _MapStop {
-  const _MapStop({
-    required this.label,
-    required this.point,
-    required this.color,
-    required this.icon,
-  });
-
-  final String label;
-  final LatLng point;
-  final Color color;
-  final IconData icon;
 }
 
 class _RouteLegendItem extends StatelessWidget {

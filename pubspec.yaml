@@ -36,11 +36,12 @@ dependencies:
   cupertino_icons: ^1.0.8
   audioplayers: ^6.8.1
   http: ^1.6.0
-  geolocator: ^14.1.1
+  geolocator: ^10.1.0
   connectivity_plus: ^7.3.1
   url_launcher: ^6.3.3
-  flutter_map: ^8.3.2
-  latlong2: ^0.10.1
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  flutter_polyline_points: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +68,7 @@ flutter:
   assets:
     - assets/sounds/rider_alert.mpeg
     - assets/sounds/logo.png
+    - assets/icons/bike.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

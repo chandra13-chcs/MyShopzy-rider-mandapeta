@@ -750,6 +750,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(find.text('Reached Store'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Reached Store'));
       await tester.pumpAndSettle();
       expect(offerStore.pickupStatus, PickupStatus.reachedPickup);

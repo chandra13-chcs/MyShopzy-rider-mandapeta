@@ -373,10 +373,8 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       throw StateError('Location permission was not granted.');
     }
     return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
+      desiredAccuracy: LocationAccuracy.high,
+      timeLimit: Duration(seconds: 15),
     );
   }
 

@@ -16,43 +16,47 @@ import 'package:myshopzy_rider/core/state/order_offer_store.dart';
 import 'package:myshopzy_rider/delivery/delivery_page.dart';
 
 void main() {
-  test('queues duty-offline status and syncs it when connectivity returns', () async {
-    final connectivity = StreamController<List<ConnectivityResult>>();
-    final synced = Completer<void>();
-    final requests = <http.Request>[];
-    final client = RiderApiClient.forTesting(
-      baseUri: Uri.parse('http://localhost:3000'),
-      httpClient: MockClient((request) async {
-        requests.add(request);
-        if (request.url.path.endsWith('/availability') && !synced.isCompleted) {
-          synced.complete();
-        }
-        return http.Response(jsonEncode({'data': {}}), 200);
-      }),
-    );
-    final availability = AvailabilityStore(
-      initialStatus: AvailabilityStatus.available,
-      apiClient: client,
-      checkConnectivity: () async => [ConnectivityResult.none],
-      connectivityChanges: connectivity.stream,
-    );
-    addTearDown(connectivity.close);
-    addTearDown(availability.dispose);
+  test(
+    'queues duty-offline status and syncs it when connectivity returns',
+    () async {
+      final connectivity = StreamController<List<ConnectivityResult>>();
+      final synced = Completer<void>();
+      final requests = <http.Request>[];
+      final client = RiderApiClient.forTesting(
+        baseUri: Uri.parse('http://localhost:3000'),
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/availability') &&
+              !synced.isCompleted) {
+            synced.complete();
+          }
+          return http.Response(jsonEncode({'data': {}}), 200);
+        }),
+      );
+      final availability = AvailabilityStore(
+        initialStatus: AvailabilityStatus.available,
+        apiClient: client,
+        checkConnectivity: () async => [ConnectivityResult.none],
+        connectivityChanges: connectivity.stream,
+      );
+      addTearDown(connectivity.close);
+      addTearDown(availability.dispose);
 
-    await availability.refreshConnectivity();
-    availability.setAvailable(false);
+      await availability.refreshConnectivity();
+      availability.setAvailable(false);
 
-    expect(availability.hasQueuedAvailabilityUpdate, isTrue);
-    expect(requests, isEmpty);
+      expect(availability.hasQueuedAvailabilityUpdate, isTrue);
+      expect(requests, isEmpty);
 
-    connectivity.add([ConnectivityResult.wifi]);
-    await synced.future.timeout(const Duration(seconds: 2));
-    await Future<void>.delayed(Duration.zero);
+      connectivity.add([ConnectivityResult.wifi]);
+      await synced.future.timeout(const Duration(seconds: 2));
+      await Future<void>.delayed(Duration.zero);
 
-    expect(availability.hasQueuedAvailabilityUpdate, isFalse);
-    expect(requests, hasLength(1));
-    expect(jsonDecode(requests.single.body), {'isOnline': false});
-  });
+      expect(availability.hasQueuedAvailabilityUpdate, isFalse);
+      expect(requests, hasLength(1));
+      expect(jsonDecode(requests.single.body), {'isOnline': false});
+    },
+  );
 
   testWidgets('renders the rider-to-store-to-customer route polyline', (
     tester,
@@ -109,22 +113,26 @@ void main() {
       activeDelivery: delivery,
       apiClient: client,
     );
-    addTearDown(store.dispose);
     addTearDown(availability.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: DeliveryPage(delivery: delivery, offerStore: store)),
+      MaterialApp(
+        home: DeliveryPage(
+          delivery: delivery,
+          offerStore: store,
+          showMapTiles: false,
+        ),
+      ),
     );
     await tester.pump();
 
-    final routeLayer = tester.widget<PolylineLayer>(
-      find.byType(PolylineLayer),
-    );
+    final routeLayer = tester.widget<PolylineLayer>(find.byType(PolylineLayer));
     expect(routeLayer.polylines, hasLength(1));
     expect(routeLayer.polylines.single.points, [
-      const LatLng(16.86, 81.92),
       const LatLng(16.87, 81.93),
       const LatLng(16.88, 81.94),
     ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    store.dispose();
   });
 }
