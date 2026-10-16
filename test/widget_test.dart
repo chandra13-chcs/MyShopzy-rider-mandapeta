@@ -8,6 +8,7 @@ import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
 import 'package:myshopzy_rider/delivery/delivery_page.dart';
 import 'package:myshopzy_rider/earnings/earnings_page.dart';
+import 'package:myshopzy_rider/gigs/gigs_page.dart';
 import 'package:myshopzy_rider/history/history_page.dart';
 import 'package:myshopzy_rider/help_support/help_support_page.dart';
 import 'package:myshopzy_rider/home/home_demo_data.dart';
@@ -23,7 +24,7 @@ void main() {
     await tester.pumpWidget(const RiderApp());
 
     expect(find.text('Good morning,'), findsOneWidget);
-    expect(find.text('MyShopzy'), findsOneWidget);
+    expect(find.text('MyShopzy'), findsNothing);
     expect(find.text('Ravi Kumar'), findsOneWidget);
     expect(find.text("You're online"), findsOneWidget);
     expect(
@@ -51,6 +52,43 @@ void main() {
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.text("You're online"), findsOneWidget);
+  });
+
+  testWidgets('home shows disconnected status while duty remains enabled', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    availabilityStore.setConnectivityAvailable(false);
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HomePage(
+          availabilityStore: availabilityStore,
+          offerStore: offerStore,
+        ),
+      ),
+    );
+
+    expect(find.text('Connection lost'), findsOneWidget);
+    expect(
+      find.text(
+        "You're on duty, but new offers are paused until you're reconnected.",
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+
+    availabilityStore.setConnectivityAvailable(true);
+    await tester.pump();
+    expect(find.text("You're online"), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
   });
 
   testWidgets('active delivery card shows its demo details', (tester) async {
@@ -132,14 +170,20 @@ void main() {
     );
     await tester.dragFrom(const Offset(180, 700), const Offset(0, -400));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(reachedCustomerButton);
+    await tester.pumpAndSettle();
     await tester.tap(reachedCustomerButton);
     await tester.pumpAndSettle();
     final handOverButton = find.widgetWithText(FilledButton, 'Hand Over');
     await tester.dragFrom(const Offset(180, 700), const Offset(0, -300));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(handOverButton);
+    await tester.pumpAndSettle();
     await tester.tap(handOverButton);
     await tester.pumpAndSettle();
     await tester.dragFrom(const Offset(180, 700), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Mark Delivered'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mark Delivered'));
     await tester.pumpAndSettle();
@@ -245,34 +289,129 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home header keeps brand wordmark beside the dynamic rider', (
+  testWidgets('gig booking follows duty status, not connectivity', (
     tester,
   ) async {
+    final availabilityStore = AvailabilityStore();
+    availabilityStore.setConnectivityAvailable(false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(availabilityStore: availabilityStore),
+      ),
+    );
+
+    expect(find.text('No internet connection'), findsNothing);
+    expect(find.text("You're offline"), findsNothing);
+    expect(find.text('Reconnect to book'), findsNothing);
+    final bookingButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('gig-book-0')),
+    );
+    expect(bookingButton.onPressed, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Gig booked for 7:00–10:00.'), findsOneWidget);
+
+    availabilityStore.setAvailable(false);
+    await tester.pump();
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(find.text('Go online to book'), findsNWidgets(4));
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
+          .onPressed,
+      isNull,
+    );
+
+    availabilityStore.setAvailable(true);
+    await tester.pump();
+    expect(find.text("You're offline"), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('gig API error is shown without disabling online booking', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    availabilityStore.apiErrorMessage = 'Unable to update duty status.';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(availabilityStore: availabilityStore),
+      ),
+    );
+
+    expect(find.text('Unable to sync with server'), findsOneWidget);
+    expect(find.text('Unable to update duty status.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  test('demo offer is restored when no offer is currently assigned', () {
     final availabilityStore = AvailabilityStore();
     final offerStore = OrderOfferStore(
       availabilityStore: availabilityStore,
       activeDelivery: null,
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: Scaffold(
-          body: HomePage(
-            availabilityStore: availabilityStore,
-            offerStore: offerStore,
-            demoData: HomeDemoData(riderName: 'Mina Rao', activeDelivery: null),
-          ),
-        ),
-      ),
+      offer: null,
     );
 
-    expect(find.text('MyShopzy'), findsOneWidget);
-    expect(find.text('Mina Rao'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
+    final initialRevision = offerStore.offerRevision;
+    expect(offerStore.showAnotherDemoOffer(), isTrue);
+    expect(offerStore.offerRevision, initialRevision + 1);
+    expect(offerStore.offer?.orderId, '#MS-2051');
+    expect(offerStore.canShowOffer, isTrue);
+
     offerStore.dispose();
     availabilityStore.dispose();
   });
+
+  testWidgets(
+    'home header shows the dynamic rider without the brand wordmark',
+    (tester) async {
+      final availabilityStore = AvailabilityStore();
+      final offerStore = OrderOfferStore(
+        availabilityStore: availabilityStore,
+        activeDelivery: null,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: HomePage(
+              availabilityStore: availabilityStore,
+              offerStore: offerStore,
+              demoData: HomeDemoData(
+                riderName: 'Mina Rao',
+                activeDelivery: null,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('MyShopzy'), findsNothing);
+      expect(find.text('Mina Rao'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      offerStore.dispose();
+      availabilityStore.dispose();
+    },
+  );
 
   testWidgets(
     'incoming offer popup displays order data and accepts via store',
@@ -408,6 +547,35 @@ void main() {
     expect(playCount, 2);
   });
 
+  testWidgets('incoming alert repeats for a new revision of the same order', (
+    tester,
+  ) async {
+    var playCount = 0;
+    var stopCount = 0;
+    final alert = NewOrderAlert(
+      stopSound: () async {
+        stopCount++;
+      },
+      playSound: () async {
+        playCount++;
+        await Future<void>.delayed(const Duration(seconds: 10));
+      },
+    );
+
+    alert.start('#MS-2051:0');
+    await tester.pump();
+    expect(playCount, 1);
+
+    alert.start('#MS-2051:1');
+    await tester.pump();
+    expect(stopCount, 1);
+    expect(playCount, 2);
+
+    await alert.dispose();
+    await tester.pump(const Duration(seconds: 10));
+    expect(playCount, 2);
+  });
+
   testWidgets('home omits duplicate shortcuts and recent delivery', (
     tester,
   ) async {
@@ -457,6 +625,38 @@ void main() {
     await _disposeOfferHarness(tester, harness);
   });
 
+  test('order acceptance requires duty status and network connectivity', () {
+    final offlineDutyStore = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    final offlineDutyOfferStore = OrderOfferStore(
+      availabilityStore: offlineDutyStore,
+      activeDelivery: null,
+    );
+
+    expect(offlineDutyStore.isConnected, isTrue);
+    expect(offlineDutyOfferStore.canAccept, isFalse);
+    expect(offlineDutyOfferStore.acceptOffer(), isFalse);
+    expect(offlineDutyOfferStore.activeDelivery, isNull);
+
+    final disconnectedStore = AvailabilityStore();
+    disconnectedStore.setConnectivityAvailable(false);
+    final disconnectedOfferStore = OrderOfferStore(
+      availabilityStore: disconnectedStore,
+      activeDelivery: null,
+    );
+
+    expect(disconnectedStore.isAvailable, isTrue);
+    expect(disconnectedOfferStore.canAccept, isFalse);
+    expect(disconnectedOfferStore.acceptOffer(), isFalse);
+    expect(disconnectedOfferStore.activeDelivery, isNull);
+
+    offlineDutyOfferStore.dispose();
+    offlineDutyStore.dispose();
+    disconnectedOfferStore.dispose();
+    disconnectedStore.dispose();
+  });
+
   testWidgets('online rider sees the local demo offer data', (tester) async {
     final harness = await _pumpOfferPage(tester, activeDelivery: null);
 
@@ -502,7 +702,14 @@ void main() {
     );
     expect(find.text('Reached Store'), findsOneWidget);
     expect(find.text('1.8 km away'), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, 800));
+    await tester.pumpAndSettle();
     expect(find.text('Order #MS-2051'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('₹ 40'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('₹ 40'), findsOneWidget);
     await _disposeOfferHarness(tester, harness);
   });
@@ -800,6 +1007,12 @@ void main() {
     await tester.tap(find.text('Continue Delivery'));
     await tester.pumpAndSettle();
     expect(find.text('Reached Customer'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Customer & Order Details'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Customer & Order Details'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();

@@ -102,7 +102,9 @@ class OrderOfferStore extends ChangeNotifier {
   bool get canAccept => _hasAcceptableOffer && !isAccepting;
 
   bool get _hasAcceptableOffer =>
-      availabilityStore.isOnlineForOrders &&
+      availabilityStore.isOnline &&
+      availabilityStore.isConnected &&
+      (apiClient == null || availabilityStore.isOnlineForOrders) &&
       activeDelivery == null &&
       status == OrderOfferStatus.available &&
       offer != null &&
@@ -553,10 +555,14 @@ class OrderOfferStore extends ChangeNotifier {
   }
 
   bool showAnotherDemoOffer() {
-    if (!availabilityStore.isAvailable || isBusy) return false;
+    if (apiClient != null || !availabilityStore.isOnlineForOrders || isBusy) {
+      return false;
+    }
 
     _timer?.cancel();
     _timer = null;
+    offer ??= DemoDelivery.newOffer;
+    _offerRevision++;
     secondsRemaining = offerDuration.inSeconds;
     status = OrderOfferStatus.available;
     _updateTimer();

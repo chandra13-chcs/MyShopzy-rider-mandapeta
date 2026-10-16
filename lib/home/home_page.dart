@@ -41,44 +41,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  bool _isCompactLayout(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < 340;
+
   @override
   Widget build(BuildContext context) {
+    final isCompact = _isCompactLayout(context);
+
     return AnimatedBuilder(
-      animation: widget.offerStore,
-      builder: (context, child) {
-        final delivery = widget.offerStore.activeDelivery;
-        return SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildHeader(),
-                    const SizedBox(height: 20),
-                    _buildAvailabilityCard(),
-                    const SizedBox(height: 22),
-                    SectionTitle(title: "Today's summary"),
-                    const SizedBox(height: 10),
-                    _buildDailySummary(),
-                    const SizedBox(height: 22),
-                    if (delivery case final activeDelivery?) ...[
-                      SectionTitle(title: 'Current Delivery'),
+      animation: widget.availabilityStore,
+      builder: (context, _) => AnimatedBuilder(
+        animation: widget.offerStore,
+        builder: (context, _) {
+          final delivery = widget.offerStore.activeDelivery;
+          return SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 20,
+                    16,
+                    isCompact ? 14 : 20,
+                    28,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      _buildAvailabilityCard(),
+                      const SizedBox(height: 22),
+                      SectionTitle(title: "Today's summary"),
                       const SizedBox(height: 10),
-                      _buildActiveDelivery(activeDelivery),
-                    ] else if (widget.offerStore.canShowOffer) ...[
-                      const SectionTitle(title: 'New Order'),
-                      const SizedBox(height: 10),
-                      _buildNewOrder(),
-                    ] else
-                      _buildWaitingState(),
-                  ]),
+                      _buildDailySummary(),
+                      const SizedBox(height: 22),
+                      if (delivery case final activeDelivery?) ...[
+                        SectionTitle(title: 'Current Delivery'),
+                        const SizedBox(height: 10),
+                        _buildActiveDelivery(activeDelivery),
+                      ] else if (widget.offerStore.canShowOffer) ...[
+                        const SectionTitle(title: 'New Order'),
+                        const SizedBox(height: 10),
+                        _buildNewOrder(),
+                      ] else
+                        _buildWaitingState(),
+                    ]),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -86,29 +99,6 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/sounds/logo.png',
-              fit: BoxFit.contain,
-              width: 36,
-              height: 36,
-            ),
-            const SizedBox(width: 4),
-            const Text(
-              'MyShopzy',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppTheme.darkGreen,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         Text(
           widget.demoData.greeting,
           style: const TextStyle(
@@ -139,57 +129,90 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildAvailabilityCard() {
     final isAvailable = widget.availabilityStore.isAvailable;
+    final isConnected = widget.availabilityStore.isConnected;
     final isBusy = widget.offerStore.isBusy;
-    final statusColor = isAvailable ? AppTheme.success : AppTheme.error;
+    final isOnline = isAvailable && isConnected;
+    final lastError = widget.availabilityStore.lastError;
+    final statusColor = isOnline ? AppTheme.success : AppTheme.error;
+    final isCompact = _isCompactLayout(context);
+
+    final content = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+          color: statusColor,
+          size: 24,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                !isAvailable
+                    ? "You're offline"
+                    : isConnected
+                    ? "You're online"
+                    : 'Connection lost',
+                style: AppTheme.cardTitle.copyWith(color: statusColor),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                !isAvailable
+                    ? "You're not available for new delivery offers."
+                    : !isConnected
+                    ? "You're on duty, but new offers are paused until you're reconnected."
+                    : isBusy
+                    ? "You're currently delivering; new offers are paused."
+                    : "You're ready to receive delivery offers.",
+                style: AppTheme.secondaryTextStyle,
+              ),
+              if (isConnected && lastError != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  lastError,
+                  style: AppTheme.secondaryTextStyle.copyWith(
+                    color: AppTheme.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Card(
-      color: isAvailable ? AppTheme.onlineBox : AppTheme.surface,
+      color: isOnline ? AppTheme.onlineBox : AppTheme.surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(
-              isAvailable ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-              color: statusColor,
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+        child: isCompact
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    isAvailable ? "You're online" : "You're offline",
-                    style: AppTheme.cardTitle.copyWith(color: statusColor),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isAvailable
-                        ? isBusy
-                              ? "You're currently delivering; new offers are paused."
-                              : "You're ready to receive delivery offers."
-                        : "You're not available for new delivery offers.",
-                    style: AppTheme.secondaryTextStyle,
-                  ),
-                  if (widget.availabilityStore.lastError case final message?) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      message,
-                      style: AppTheme.secondaryTextStyle.copyWith(
-                        color: AppTheme.error,
-                      ),
+                  content,
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Switch.adaptive(
+                      value: isAvailable,
+                      activeTrackColor: AppTheme.success,
+                      onChanged: widget.availabilityStore.setAvailable,
                     ),
-                  ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: content),
+                  Switch.adaptive(
+                    value: isAvailable,
+                    activeTrackColor: AppTheme.success,
+                    onChanged: widget.availabilityStore.setAvailable,
+                  ),
                 ],
               ),
-            ),
-            Switch.adaptive(
-              value: isAvailable,
-              activeTrackColor: AppTheme.success,
-              onChanged: widget.availabilityStore.setAvailable,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -202,47 +225,70 @@ class _HomePageState extends State<HomePage> {
     final earnings = settlementMinor == null && !isLiveApi
         ? '₹${data.todayEarnings}'
         : '₹${((settlementMinor ?? 0) / 100).toStringAsFixed(2)}';
+    final isCompact = _isCompactLayout(context);
+
+    final cards = [
+      _StatCard(
+        icon: Icons.check_circle_outline_rounded,
+        label: 'Deliveries',
+        value:
+            '${completedToday ?? (isLiveApi ? 0 : data.deliveriesCompleted)}',
+        detail: 'completed',
+      ),
+      _StatCard(
+        icon: Icons.payments_outlined,
+        label: "Today's earnings",
+        value: earnings,
+      ),
+    ];
+
+    final distanceCards = [
+      _StatCard(
+        icon: Icons.route_outlined,
+        label: 'Distance',
+        value: '${data.distanceKm.toStringAsFixed(1)} km',
+      ),
+      _StatCard(
+        icon: Icons.schedule_outlined,
+        label: 'Online time',
+        value: data.onlineTime,
+      ),
+    ];
+
+    if (isCompact) {
+      return Column(
+        children: [
+          ...cards.map(
+            (card) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: card,
+            ),
+          ),
+          ...distanceCards.map(
+            (card) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: card,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         Row(
           children: [
-            Expanded(
-              child: _StatCard(
-                icon: Icons.check_circle_outline_rounded,
-                label: 'Deliveries',
-                value:
-                    '${completedToday ?? (isLiveApi ? 0 : data.deliveriesCompleted)}',
-                detail: 'completed',
-              ),
-            ),
+            Expanded(child: cards.first),
             const SizedBox(width: 10),
-            Expanded(
-              child: _StatCard(
-                icon: Icons.payments_outlined,
-                label: "Today's earnings",
-                value: earnings,
-              ),
-            ),
+            Expanded(child: cards.last),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(
-              child: _StatCard(
-                icon: Icons.route_outlined,
-                label: 'Distance',
-                value: '${data.distanceKm.toStringAsFixed(1)} km',
-              ),
-            ),
+            Expanded(child: distanceCards.first),
             const SizedBox(width: 10),
-            Expanded(
-              child: _StatCard(
-                icon: Icons.schedule_outlined,
-                label: 'Online time',
-                value: data.onlineTime,
-              ),
-            ),
+            Expanded(child: distanceCards.last),
           ],
         ),
       ],
@@ -252,6 +298,8 @@ class _HomePageState extends State<HomePage> {
   Widget _buildNewOrder() {
     final offer = widget.offerStore.offer;
     if (offer == null) return const SizedBox.shrink();
+    final isCompact = _isCompactLayout(context);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -273,52 +321,79 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 12),
             Text(offer.orderId, style: AppTheme.bodyText),
             const SizedBox(height: 10),
-            _OfferSummaryRow(label: 'Store', value: offer.store),
-            _OfferSummaryRow(label: 'Pickup', value: offer.pickup),
-            _OfferSummaryRow(
-              label: 'Pickup distance',
-              value: offer.pickupDistanceLabel,
-            ),
-            _OfferSummaryRow(label: 'Drop', value: offer.drop),
-            _OfferSummaryRow(
-              label: 'Delivery distance',
-              value: offer.deliveryDistanceLabel,
-            ),
-            _OfferSummaryRow(
-              label: 'Total distance',
-              value: offer.totalDistanceLabel,
-            ),
-            _OfferSummaryRow(
-              label: 'Payout breakdown',
-              value: offer.payoutBreakdown,
-            ),
-            _OfferSummaryRow(
-              label: 'Estimated payout',
-              value: '₹${offer.calculatedPayout}',
-            ),
-            _OfferSummaryRow(label: 'Vehicle', value: offer.vehicle),
+            ...[
+              _OfferSummaryRow(label: 'Store', value: offer.store),
+              _OfferSummaryRow(label: 'Pickup', value: offer.pickup),
+              _OfferSummaryRow(
+                label: 'Pickup distance',
+                value: offer.pickupDistanceLabel,
+              ),
+              _OfferSummaryRow(label: 'Drop', value: offer.drop),
+              _OfferSummaryRow(
+                label: 'Delivery distance',
+                value: offer.deliveryDistanceLabel,
+              ),
+              _OfferSummaryRow(
+                label: 'Total distance',
+                value: offer.totalDistanceLabel,
+              ),
+              _OfferSummaryRow(
+                label: 'Payout breakdown',
+                value: offer.payoutBreakdown,
+              ),
+              _OfferSummaryRow(
+                label: 'Estimated payout',
+                value: '₹${offer.calculatedPayout}',
+              ),
+              _OfferSummaryRow(label: 'Vehicle', value: offer.vehicle),
+            ],
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.offerStore.canAccept
-                        ? () => widget.offerStore.rejectOffer()
-                        : null,
-                    child: const Text('Reject'),
+            if (isCompact)
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: widget.offerStore.canAccept
+                          ? () => widget.offerStore.rejectOffer()
+                          : null,
+                      child: const Text('Reject'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: widget.offerStore.canAccept
-                        ? () => _acceptOffer(offer)
-                        : null,
-                    child: const Text('Accept'),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: widget.offerStore.canAccept
+                          ? () => _acceptOffer(offer)
+                          : null,
+                      child: const Text('Accept'),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.offerStore.canAccept
+                          ? () => widget.offerStore.rejectOffer()
+                          : null,
+                      child: const Text('Reject'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: widget.offerStore.canAccept
+                          ? () => _acceptOffer(offer)
+                          : null,
+                      child: const Text('Accept'),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -330,20 +405,22 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     if (!accepted) {
       final message =
-          widget.offerStore.errorMessage ?? 'This order is no longer available.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+          widget.offerStore.errorMessage ??
+          'This order is no longer available.';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     await _openDeliveryPage(delivery);
   }
 
   Widget _buildActiveDelivery(DemoDelivery delivery) {
+    final isCompact = _isCompactLayout(context);
+
     return Card(
       color: AppTheme.currentDeliveryCard,
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(isCompact ? 14 : 18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -477,18 +554,35 @@ class _OfferSummaryRow extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 124,
-          child: Text(label, style: AppTheme.secondaryTextStyle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(value, style: AppTheme.bodyText)),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 320;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: isCompact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: AppTheme.secondaryTextStyle),
+                    const SizedBox(height: 2),
+                    Text(value, style: AppTheme.bodyText),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 124,
+                      child: Text(label, style: AppTheme.secondaryTextStyle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(value, style: AppTheme.bodyText)),
+                  ],
+                ),
+        );
+      },
+    );
+  }
 }

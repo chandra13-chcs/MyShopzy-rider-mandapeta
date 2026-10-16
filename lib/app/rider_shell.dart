@@ -51,7 +51,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     EarningsPage(offerStore: _offerStore),
-    const GigsPage(),
+    GigsPage(availabilityStore: _availabilityStore),
     ProfilePage(availabilityStore: _availabilityStore),
   ];
 
@@ -108,7 +108,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     if (orderId == null) return;
     final offerToken = '$orderId:${_offerStore.offerRevision}';
     _newOrderAlert.start(offerToken);
-    if (_incomingDialogShowing || _presentedOfferToken == offerToken) return;
+    if (_presentedOfferToken == offerToken || _incomingDialogShowing) return;
 
     _presentedOfferToken = offerToken;
     _incomingDialogShowing = true;
@@ -118,7 +118,16 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showIncomingOffer(String orderId, String offerToken) async {
-    if (!_offerStore.canShowOffer || _offerStore.offer?.orderId != orderId) {
+    final currentOffer = _offerStore.offer;
+    final currentOfferToken = currentOffer == null
+        ? null
+        : '${currentOffer.orderId}:${_offerStore.offerRevision}';
+    if (!_offerStore.canShowOffer ||
+        currentOfferToken != offerToken ||
+        currentOffer?.orderId != orderId) {
+      if (_presentedOfferToken == offerToken) {
+        _presentedOfferToken = null;
+      }
       _incomingDialogShowing = false;
       _handleOfferStoreChanged();
       return;

@@ -24,9 +24,10 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
            (getCurrentPosition == null ? _getDevicePositionStream : null),
        _playOverspeedSound = playOverspeedSound ?? _playSystemAlertSound,
        super(initialStatus) {
-    if (apiClient != null ||
-        checkConnectivity != null ||
-        connectivityChanges != null) {
+    if (!kIsWeb &&
+        (apiClient != null ||
+            checkConnectivity != null ||
+            connectivityChanges != null)) {
       isConnected = false;
       final connectivity = Connectivity();
       _connectivitySubscription =
@@ -50,6 +51,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   final Stream<List<ConnectivityResult>>? connectivityChanges;
   int _requestGeneration = 0;
   int _connectivityCheckGeneration = 0;
+  bool _disposed = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   StreamSubscription<Position>? _positionSubscription;
   Position? _lastPosition;
@@ -68,11 +70,13 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   bool isOverspeeding = false;
 
   String? lastError;
+  String? apiErrorMessage;
 
-  bool get isAvailable => value == AvailabilityStatus.available;
+  bool get isOnline => value == AvailabilityStatus.available;
+  bool get isAvailable => isOnline;
   bool get hasQueuedLocation => _pendingLocation != null;
   bool get isOnlineForOrders =>
-      isAvailable && isConnected && (apiClient == null || _hasPostedLocation);
+      isOnline && isConnected && (apiClient == null || _hasPostedLocation);
 
   Future<void> refreshConnectivity() async {
     final generation = ++_connectivityCheckGeneration;
@@ -102,7 +106,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
     if (connected) unawaited(_flushQueuedAvailability());
     if (connected &&
         !wasConnected &&
-        isAvailable &&
+        isOnline &&
         apiClient != null &&
         _locationTrackingRequested) {
       final position = _lastPosition ?? _pendingLocation;
@@ -120,8 +124,9 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
     isConnected = available;
     if (!available) {
       _hasPostedLocation = false;
-      if (isAvailable && _locationTrackingRequested) {
-        lastError = 'Connection lost. Your latest location will sync when connected.';
+      if (isOnline && _locationTrackingRequested) {
+        lastError =
+            'Connection lost. Your latest location will sync when connected.';
       }
     } else {
       unawaited(_flushQueuedAvailability());
@@ -140,14 +145,15 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       speedKmh = null;
       isOverspeeding = false;
       _pendingLocation = null;
-    } else {
-      _queuedAvailabilityUpdate = null;
+    } else if (apiClient != null) {
+      _queuedAvailabilityUpdate = true;
     }
     value = nextValue;
     if (apiClient == null) return;
     if (isAvailable) {
       _hasPostedLocation = false;
       _locationTrackingRequested = true;
+      unawaited(_flushQueuedAvailability());
       if (isConnected) unawaited(_startLocationTracking(generation));
     } else {
       _hasPostedLocation = false;
@@ -162,35 +168,36 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   Future<void> _startLocationTracking(int generation) async {
     if (_startingGeneration == generation ||
         _positionSubscription != null ||
-        !isAvailable ||
+        !isOnline ||
         !isConnected) {
       return;
     }
     _startingGeneration = generation;
     try {
       final position = await _getCurrentPosition();
-      if (generation != _requestGeneration || !isAvailable) return;
+      if (generation != _requestGeneration || !isOnline) return;
       await _postPosition(position, generation);
       final positions = _positionStream?.call();
-      if (positions != null &&
-          generation == _requestGeneration &&
-          isAvailable) {
+      if (positions != null && generation == _requestGeneration && isOnline) {
         _positionSubscription = positions.listen(
           (nextPosition) => unawaited(_postPosition(nextPosition, generation)),
           onError: (Object error, StackTrace stackTrace) {
-            if (generation != _requestGeneration || !isAvailable) return;
+            if (generation != _requestGeneration || !isOnline) return;
             debugPrint('Rider location stream failed: $error');
             lastError = 'Unable to keep sharing your location.';
-            setAvailable(false);
+            _hasPostedLocation = false;
+            notifyListeners();
           },
         );
       }
     } on Object catch (error) {
-      if (generation != _requestGeneration || !isAvailable) return;
-      lastError = error is RiderApiException
-          ? error.message
-          : 'Unable to get or send your location. Check location permissions.';
-      setAvailable(false);
+      if (generation != _requestGeneration || !isOnline) return;
+      if (error is RiderApiException) apiErrorMessage = error.message;
+      if (error is RiderApiException && error.statusCode != 0) {
+        setAvailable(false);
+      } else if (error is RiderApiException) {
+        setConnectivityAvailable(false);
+      }
       lastError = error is RiderApiException
           ? error.message
           : 'Unable to get or send your location. Check location permissions.';
@@ -201,9 +208,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   }
 
   Future<void> _postPosition(Position position, int generation) async {
-    if (generation != _requestGeneration ||
-        !isAvailable ||
-        apiClient == null) {
+    if (generation != _requestGeneration || !isOnline || apiClient == null) {
       return;
     }
 
@@ -217,7 +222,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   Future<void> _flushQueuedLocations(int generation) async {
     if (_isFlushingLocations ||
         generation != _requestGeneration ||
-        !isAvailable ||
+        !isOnline ||
         !isConnected ||
         apiClient == null) {
       return;
@@ -227,7 +232,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
     try {
       while (_pendingLocation != null &&
           generation == _requestGeneration &&
-          isAvailable &&
+          isOnline &&
           isConnected) {
         final position = _pendingLocation!;
         _pendingLocation = null;
@@ -238,7 +243,10 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
           );
         } on Object catch (error) {
           _pendingLocation ??= position;
-          if (generation != _requestGeneration || !isAvailable) return;
+          if (generation != _requestGeneration || !isOnline) return;
+          apiErrorMessage = error is RiderApiException
+              ? error.message
+              : 'Unable to send your location.';
           if (error is RiderApiException && error.statusCode == 0) {
             setConnectivityAvailable(false);
           } else {
@@ -251,9 +259,10 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
           }
           return;
         }
-        if (generation == _requestGeneration && isAvailable && isConnected) {
+        if (generation == _requestGeneration && isOnline && isConnected) {
           _hasPostedLocation = true;
           lastError = null;
+          apiErrorMessage = null;
           notifyListeners();
         }
       }
@@ -265,8 +274,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   void _updateSpeedWarning(Position position) {
     final speed = position.speed;
     speedKmh = speed.isFinite && speed >= 0 ? speed * 3.6 : null;
-    final overspeeding =
-        speedKmh != null && speedKmh! > overspeedLimitKmh;
+    final overspeeding = speedKmh != null && speedKmh! > overspeedLimitKmh;
     if (isOverspeeding == overspeeding) return;
 
     isOverspeeding = overspeeding;
@@ -299,28 +307,42 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
     if (_isFlushingAvailability ||
         _queuedAvailabilityUpdate == null ||
         !isConnected ||
-        apiClient == null) {
+        apiClient == null ||
+        _disposed) {
       return;
     }
 
     _isFlushingAvailability = true;
     try {
-      final requestedAvailability = _queuedAvailabilityUpdate!;
-      await apiClient!.updateAvailability(requestedAvailability);
-      if (_queuedAvailabilityUpdate == requestedAvailability) {
-        _queuedAvailabilityUpdate = null;
-        lastError = null;
+      while (_queuedAvailabilityUpdate != null && isConnected && !_disposed) {
+        final requestedAvailability = _queuedAvailabilityUpdate!;
+        try {
+          await apiClient!.updateAvailability(requestedAvailability);
+          if (_queuedAvailabilityUpdate == requestedAvailability) {
+            _queuedAvailabilityUpdate = null;
+            apiErrorMessage = null;
+            if (lastError ==
+                    'Duty status saved offline. It will sync when connected.' ||
+                lastError == 'Unable to update your duty status.') {
+              lastError = null;
+            }
+          }
+        } on Object catch (error) {
+          if (error is RiderApiException && error.statusCode == 0) {
+            setConnectivityAvailable(false);
+          }
+          apiErrorMessage = error is RiderApiException
+              ? error.message
+              : 'Unable to update your duty status.';
+          lastError = error is RiderApiException
+              ? error.message
+              : 'Unable to update your duty status.';
+          break;
+        }
       }
-    } on Object catch (error) {
-      if (error is RiderApiException && error.statusCode == 0) {
-        setConnectivityAvailable(false);
-      }
-      lastError = error is RiderApiException
-          ? error.message
-          : 'Unable to update your duty status.';
     } finally {
       _isFlushingAvailability = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -332,6 +354,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
 
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_connectivitySubscription?.cancel());
     unawaited(_stopLocationTracking());
     super.dispose();

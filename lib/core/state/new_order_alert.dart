@@ -26,7 +26,7 @@ class NewOrderAlert {
   final Future<void> Function()? _playSound;
   final Future<void> Function() _vibrate;
   final Future<void> Function()? stopSound;
-  final Set<String> _alertedOrderIds = {};
+  final Set<String> _alertedOfferIds = {};
   Timer? _windowTimer;
   Timer? _vibrationTimer;
   String? _orderId;
@@ -36,12 +36,14 @@ class NewOrderAlert {
   late final StreamSubscription<void>? _completionSubscription;
 
   void start(String orderId) {
-    if (_alertedOrderIds.contains(orderId)) return;
+    if (_alertedOfferIds.contains(orderId)) return;
 
     final shouldStopPrevious = _orderId != null || _isPlaying;
     final generation = ++_generation;
-    _alertedOrderIds.add(orderId);
+    _alertedOfferIds.add(orderId);
     _windowTimer?.cancel();
+    _vibrationTimer?.cancel();
+    _vibrationTimer = null;
     _orderId = orderId;
     _isPlaying = false;
     _windowTimer = Timer(alertDuration, () {

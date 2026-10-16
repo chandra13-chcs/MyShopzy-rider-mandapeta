@@ -194,16 +194,21 @@ class OrdersPage extends StatelessWidget {
   Widget _buildNoOfferState(BuildContext context) {
     final isExpired = offerStore.status == OrderOfferStatus.expired;
     final wasRejected = offerStore.status == OrderOfferStatus.rejected;
+    final isLive = offerStore.apiClient != null;
     final title = isExpired
         ? 'Offer expired'
         : wasRejected
         ? 'Offer rejected'
         : 'Ready for delivery offers';
-    final message = isExpired
-        ? 'No longer available'
-        : wasRejected
-        ? 'You remain online and can receive another demo offer.'
-        : 'Stay online to receive nearby delivery offers.';
+    final message =
+        offerStore.errorMessage ??
+        (isExpired
+            ? 'No longer available'
+            : wasRejected
+            ? 'You remain online and can receive another demo offer.'
+            : isLive
+            ? 'Stay online to receive nearby delivery offers.'
+            : 'Stay online to receive another demo offer.');
 
     return Card(
       child: Padding(
@@ -215,18 +220,34 @@ class OrdersPage extends StatelessWidget {
             const SizedBox(height: 5),
             Text(message, style: AppTheme.secondaryTextStyle),
             const SizedBox(height: 14),
-            FilledButton(
-              onPressed: () {
-                if (offerStore.showAnotherDemoOffer()) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => OrderOfferPage(offerStore: offerStore),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Check for demo offer'),
-            ),
+            if (isLive)
+              FilledButton(
+                onPressed: availabilityStore.isOnlineForOrders &&
+                        !offerStore.isLoadingOffers
+                    ? offerStore.refreshAvailableOrders
+                    : null,
+                child: Text(
+                  offerStore.isLoadingOffers
+                      ? 'Checking for orders...'
+                      : 'Check for available orders',
+                ),
+              )
+            else
+              FilledButton(
+                onPressed: availabilityStore.isOnlineForOrders
+                    ? () {
+                        if (offerStore.showAnotherDemoOffer()) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  OrderOfferPage(offerStore: offerStore),
+                            ),
+                          );
+                        }
+                      }
+                    : null,
+                child: const Text('Check for demo offer'),
+              ),
           ],
         ),
       ),

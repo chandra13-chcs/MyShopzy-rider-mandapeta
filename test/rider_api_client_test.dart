@@ -500,9 +500,16 @@ void main() {
 
   test('syncs a GPS fix when duty status changes to online', () async {
     var postedLocation = false;
+    var postedOnlineStatus = false;
+    final onlineStatusSynced = Completer<void>();
     final client = RiderApiClient.forTesting(
       baseUri: Uri.parse('http://localhost:3000'),
       httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/availability') &&
+            jsonDecode(request.body)['isOnline'] == true) {
+          postedOnlineStatus = true;
+          if (!onlineStatusSynced.isCompleted) onlineStatusSynced.complete();
+        }
         postedLocation =
             request.url.path == '/api/v1/rider/location' &&
             jsonDecode(request.body)['latitude'] == 16.87 &&
@@ -537,11 +544,48 @@ void main() {
     addTearDown(availability.dispose);
 
     availability.setAvailable(true);
+    await onlineStatusSynced.future.timeout(const Duration(seconds: 2));
     await Future<void>.delayed(Duration.zero);
 
     expect(postedLocation, isTrue);
+    expect(postedOnlineStatus, isTrue);
     expect(availability.isAvailable, isTrue);
+    expect(availability.isOnline, isTrue);
     expect(availability.lastError, isNull);
+  });
+
+  test('location permission failure does not switch duty offline', () async {
+    final availabilitySynced = Completer<void>();
+    final client = RiderApiClient.forTesting(
+      baseUri: Uri.parse('http://localhost:3000'),
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/availability') &&
+            jsonDecode(request.body)['isOnline'] == true &&
+            !availabilitySynced.isCompleted) {
+          availabilitySynced.complete();
+        }
+        return http.Response(jsonEncode({'data': {}}), 200);
+      }),
+    );
+    final availability = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+      apiClient: client,
+      getCurrentPosition: () async => throw StateError('Permission denied'),
+      checkConnectivity: () async => [ConnectivityResult.wifi],
+      connectivityChanges: const Stream.empty(),
+    );
+    addTearDown(availability.dispose);
+
+    availability.setAvailable(true);
+    await availabilitySynced.future.timeout(const Duration(seconds: 2));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(availability.isOnline, isTrue);
+    expect(availability.isOnlineForOrders, isFalse);
+    expect(
+      availability.lastError,
+      'Unable to get or send your location. Check location permissions.',
+    );
   });
 
   test(
@@ -567,6 +611,7 @@ void main() {
             }
           }
           if (request.url.path.endsWith('/availability') &&
+              jsonDecode(request.body)['isOnline'] == false &&
               !dutyOffSent.isCompleted) {
             dutyOffSent.complete();
           }
@@ -812,6 +857,62 @@ void main() {
     );
   });
 
+  test('live order acceptance is blocked when duty is offline or network is disconnected', () async {
+    final requests = <http.Request>[];
+    final client = RiderApiClient.forTesting(
+      baseUri: Uri.parse('http://localhost:3000'),
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'order': {
+                'orderId': orderId,
+                'store': 'Green Basket',
+                'pickup': {'locality': 'Mandapeta'},
+                'drop': {'formattedAddress': '12 Market Road'},
+              },
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final offlineDuty = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    final offlineDutyStore = OrderOfferStore(
+      availabilityStore: offlineDuty,
+      activeDelivery: null,
+      offer: DemoDelivery.newOffer,
+      apiClient: client,
+    );
+    expect(offlineDuty.isConnected, isTrue);
+    expect(offlineDutyStore.canAccept, isFalse);
+    expect(await offlineDutyStore.acceptAvailableOffer(), isFalse);
+    expect(offlineDutyStore.activeDelivery, isNull);
+
+    final disconnected = AvailabilityStore();
+    disconnected.setConnectivityAvailable(false);
+    final disconnectedStore = OrderOfferStore(
+      availabilityStore: disconnected,
+      activeDelivery: null,
+      offer: DemoDelivery.newOffer,
+      apiClient: client,
+    );
+    expect(disconnected.isAvailable, isTrue);
+    expect(disconnectedStore.canAccept, isFalse);
+    expect(await disconnectedStore.acceptAvailableOffer(), isFalse);
+    expect(disconnectedStore.activeDelivery, isNull);
+    expect(requests, isEmpty);
+
+    offlineDutyStore.dispose();
+    offlineDuty.dispose();
+    disconnectedStore.dispose();
+    disconnected.dispose();
+  });
+
   test(
     'does not poll or accept offers while connectivity is offline',
     () async {
@@ -898,4 +999,51 @@ void main() {
       expect(requests.map((request) => request.method), ['GET', 'POST']);
     },
   );
+
+  test('only polls for orders while local duty is online', () async {
+    final offerCheck = Completer<void>();
+    final requests = <http.Request>[];
+    final client = RiderApiClient.forTesting(
+      baseUri: Uri.parse('http://localhost:3000'),
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.endsWith('/available') &&
+            !offerCheck.isCompleted) {
+          offerCheck.complete();
+        }
+        return http.Response(
+          jsonEncode({
+            'data': {'orders': []},
+          }),
+          200,
+        );
+      }),
+    );
+    final availability = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    final store = OrderOfferStore(
+      availabilityStore: availability,
+      activeDelivery: null,
+      offer: null,
+      apiClient: client,
+    );
+    addTearDown(store.dispose);
+    addTearDown(availability.dispose);
+
+    await store.refreshAvailableOrders();
+    expect(requests, isEmpty);
+
+    availability.setAvailable(true);
+    await offerCheck.future.timeout(const Duration(seconds: 2));
+    await Future<void>.delayed(Duration.zero);
+    expect(availability.isOnline, isTrue);
+    expect(requests.map((request) => request.url.path), [
+      '/api/v1/rider/orders/available',
+    ]);
+
+    availability.setAvailable(false);
+    await store.refreshAvailableOrders();
+    expect(requests, hasLength(1));
+  });
 }
