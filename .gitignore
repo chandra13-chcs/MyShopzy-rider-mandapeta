@@ -33,6 +33,15 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node.js dependencies
+node_modules/
+
 # Symbolication related
 app.*.symbols
 
