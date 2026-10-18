@@ -10,6 +10,7 @@ import '../core/network/rider_api_client.dart';
 import '../core/theme/app_theme.dart';
 import '../delivery/delivery_page.dart';
 import '../earnings/earnings_page.dart';
+import '../gigs/gig_repository.dart';
 import '../gigs/gigs_page.dart';
 import '../home/home_demo_data.dart';
 import '../home/home_page.dart';
@@ -46,12 +47,15 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     offer: widget.apiClient == null ? DemoDelivery.newOffer : null,
     apiClient: widget.apiClient,
   );
+  late final _gigRepository = widget.apiClient == null
+      ? DemoGigRepository()
+      : const UnavailableGigRepository();
   late final _newOrderAlert = NewOrderAlert();
   late final _pages = [
     HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     EarningsPage(offerStore: _offerStore),
-    GigsPage(availabilityStore: _availabilityStore),
+    GigsPage(availabilityStore: _availabilityStore, repository: _gigRepository),
     ProfilePage(availabilityStore: _availabilityStore),
   ];
 

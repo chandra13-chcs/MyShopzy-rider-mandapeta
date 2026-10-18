@@ -8,6 +8,7 @@ import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
 import 'package:myshopzy_rider/delivery/delivery_page.dart';
 import 'package:myshopzy_rider/earnings/earnings_page.dart';
+import 'package:myshopzy_rider/gigs/gig_repository.dart';
 import 'package:myshopzy_rider/gigs/gigs_page.dart';
 import 'package:myshopzy_rider/history/history_page.dart';
 import 'package:myshopzy_rider/help_support/help_support_page.dart';
@@ -234,7 +235,7 @@ void main() {
 
     await tester.tap(find.text('Gigs').last);
     await tester.pumpAndSettle();
-    expect(find.text('Book a gig slot'), findsOneWidget);
+    expect(find.text("Today's gig sessions"), findsOneWidget);
 
     await tester.tap(find.text('Profile').last);
     await tester.pumpAndSettle();
@@ -252,18 +253,50 @@ void main() {
     expect(find.text("You're currently delivering"), findsOneWidget);
   });
 
-  testWidgets('Gigs navigation permits booking multiple available slots', (
+  testWidgets('gig sessions allow current and future sessions only', (
     tester,
   ) async {
-    await tester.pumpWidget(const RiderApp());
-    await tester.tap(find.text('Gigs').last);
-    await tester.pumpAndSettle();
+    final availabilityStore = AvailabilityStore();
+    final repository = DemoGigRepository();
+    final now = DateTime(2026, 10, 18, 8);
 
-    expect(find.text('7:00–10:00'), findsOneWidget);
-    expect(find.text('10:00–12:00'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: repository,
+          clock: () => now,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Gig booked for 7:00–10:00.'), findsOneWidget);
+    expect(find.text('Morning'), findsOneWidget);
+    expect(find.text('Late Morning'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNotNull,
+    );
+
+    final detailsButton = find.byKey(const ValueKey('gig-book-0'));
+    await tester.ensureVisible(detailsButton);
+    await tester.tap(detailsButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Session details'), findsOneWidget);
+    await tester.tap(find.text('Book Session'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pumpAndSettle();
+    expect(find.text('Gig Session Booked!'), findsOneWidget);
+    await tester.tap(find.text('View My Gigs'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Gigs'), findsWidgets);
+    expect(find.text('Morning'), findsOneWidget);
+
+    await tester.tap(find.text('Book a session'));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
@@ -276,57 +309,42 @@ void main() {
           .onPressed,
       isNotNull,
     );
-
+    await tester.ensureVisible(find.byKey(const ValueKey('gig-book-1')));
     await tester.tap(find.byKey(const ValueKey('gig-book-1')));
     await tester.pumpAndSettle();
-    expect(find.text('2 booked'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-2')))
-          .onPressed,
-      isNotNull,
-    );
-    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Book Session'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pumpAndSettle();
+    expect(find.text('Gig Session Booked!'), findsOneWidget);
+    await tester.tap(find.text('View My Gigs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel Session'), findsNWidgets(2));
+
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
   });
 
-  testWidgets('gig booking follows duty status, not connectivity', (
+  testWidgets('ended gig session cannot be booked after its end time', (
     tester,
   ) async {
     final availabilityStore = AvailabilityStore();
-    availabilityStore.setConnectivityAvailable(false);
-
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: GigsPage(availabilityStore: availabilityStore),
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          clock: () => DateTime(2026, 10, 18, 11),
+        ),
       ),
     );
-
-    expect(find.text('No internet connection'), findsNothing);
-    expect(find.text("You're offline"), findsNothing);
-    expect(find.text('Reconnect to book'), findsNothing);
-    final bookingButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('gig-book-0')),
-    );
-    expect(bookingButton.onPressed, isNotNull);
-    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
     await tester.pumpAndSettle();
-    expect(find.text('Gig booked for 7:00–10:00.'), findsOneWidget);
-
-    availabilityStore.setAvailable(false);
-    await tester.pump();
-    expect(find.text("You're offline"), findsOneWidget);
-    expect(find.text('Go online to book'), findsNWidgets(4));
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
       isNull,
     );
-
-    availabilityStore.setAvailable(true);
-    await tester.pump();
-    expect(find.text("You're offline"), findsNothing);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
@@ -337,27 +355,280 @@ void main() {
     availabilityStore.dispose();
   });
 
-  testWidgets('gig API error is shown without disabling online booking', (
-    tester,
-  ) async {
+  testWidgets('session cannot be booked at its exact end time', (tester) async {
     final availabilityStore = AvailabilityStore();
-    availabilityStore.apiErrorMessage = 'Unable to update duty status.';
-
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: GigsPage(availabilityStore: availabilityStore),
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          clock: () => DateTime(2026, 10, 18, 10),
+        ),
       ),
     );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
 
-    expect(find.text('Unable to sync with server'), findsOneWidget);
-    expect(find.text('Unable to update duty status.'), findsOneWidget);
+  testWidgets('sessions with no remaining backend slots cannot be booked', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final repository = DemoGigRepository(
+      availability: const {
+        'morning': GigAvailability(availableSlots: 0, totalSlots: 4),
+      },
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: repository,
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Full'), findsOneWidget);
+    expect(find.text('0 / 4 slots'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('offline gig booking offers Go Online', (tester) async {
+    final availabilityStore = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('Go Online').first);
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
       isNotNull,
     );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('Gigs fits a narrow mobile viewport across its flows', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final availabilityStore = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: DemoGigRepository(),
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Go Online').first);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Morning').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Session details'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My Gigs').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('my-gigs')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('demo gig bookings can be cancelled and become visible', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final repository = DemoGigRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: repository,
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Book Session'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View My Gigs'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Cancel Session'));
+    await tester.tap(find.text('Cancel Session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel this session?'), findsOneWidget);
+    await tester.tap(find.text('Confirm Cancellation'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(find.text('Session cancelled'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('my-gigs')), findsOneWidget);
+    expect(
+      (await repository.getGigData(DateTime(2026, 10, 18)))
+          .bookings
+          .single
+          .status,
+      GigBookingStatus.cancelled,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Cancelled sessions'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Cancelled sessions'), findsOneWidget);
+    expect(find.text('Cancelled'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('gig booking stays unavailable when backend is not integrated', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: const UnavailableGigRepository(),
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Gig booking is not connected to the rider service yet.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('failed gig booking remains retryable without false success', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final repository = _FailingGigRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: repository,
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('gig-book-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Book Session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Booking rejected for test.'), findsOneWidget);
+    expect(find.text('Gig Session Booked!'), findsNothing);
+    expect(find.text('Book Session'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    availabilityStore.dispose();
+  });
+
+  testWidgets('failed gig cancellation keeps the booking active', (
+    tester,
+  ) async {
+    final availabilityStore = AvailabilityStore();
+    final repository = _FailingGigRepository(
+      bookings: [
+        GigBooking(
+          id: 'test-booking',
+          sessionId: 'morning',
+          date: DateTime(2026, 10, 18),
+          status: GigBookingStatus.booked,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GigsPage(
+          availabilityStore: availabilityStore,
+          repository: repository,
+          clock: () => DateTime(2026, 10, 18, 8),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My Gigs'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel Session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Cancellation'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancellation rejected for test.'), findsOneWidget);
+    expect(find.text('Session cancelled'), findsNothing);
+    expect(find.text('In Progress'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
@@ -2272,4 +2543,28 @@ Future<AvailabilityStore> _pumpProfilePage(WidgetTester tester) async {
     ),
   );
   return availabilityStore;
+}
+
+class _FailingGigRepository implements GigRepository {
+  _FailingGigRepository({this.bookings = const []});
+
+  final List<GigBooking> bookings;
+
+  @override
+  bool get isDemo => false;
+
+  @override
+  Future<GigDataSnapshot> getGigData(DateTime date) async =>
+      GigDataSnapshot(bookings: bookings, availability: const {});
+
+  @override
+  Future<GigBooking> bookSession(GigSession session, DateTime date) =>
+      Future<GigBooking>.error(
+        const GigRepositoryException('Booking rejected for test.'),
+      );
+
+  @override
+  Future<void> cancelBooking(GigBooking booking) => Future<void>.error(
+    const GigRepositoryException('Cancellation rejected for test.'),
+  );
 }

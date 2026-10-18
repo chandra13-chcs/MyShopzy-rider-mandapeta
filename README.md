@@ -6,6 +6,7 @@ Home screen with sample delivery, earnings, profile, and settings content.
 ## Included screens
 
 - Home dashboard and online availability toggle
+- Five daily gig sessions and My Gigs booking history
 - Delivery details and order list
 - Delivery history and earnings
 - Rider profile, preferences, and help/support
@@ -35,6 +36,13 @@ Navigation opens external map directions, while customer call/SMS actions are
 enabled only after the order is accepted and a phone number is returned.
 Completed deliveries update the backend settlement record and refresh the
 daily earnings summary.
+
+The gig sessions currently use an in-memory demo repository only when the app
+is run without a Rider API client. Demo bookings are explicitly labelled,
+include no simulated slot counts, and are not saved to a server or across app
+restarts. When a Rider API client is configured, gig booking stays unavailable
+until the backend provides session availability, booking, and cancellation
+endpoints; delivery-order APIs are not used for gig sessions.
 
 GPS fixes and order status updates that fail because of lost connectivity are
 kept in an in-memory retry queue and flushed when connectivity returns. These
