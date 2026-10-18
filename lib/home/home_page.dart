@@ -69,6 +69,8 @@ class _HomePageState extends State<HomePage> {
                       _buildHeader(),
                       const SizedBox(height: 20),
                       _buildAvailabilityCard(),
+                      const SizedBox(height: 18),
+                      _buildSafetyBanner(),
                       const SizedBox(height: 22),
                       SectionTitle(title: "Today's summary"),
                       const SizedBox(height: 10),
@@ -213,6 +215,77 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildSafetyBanner() {
+    final isCompact = _isCompactLayout(context);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFF0e9b52), Color(0xFF0b7d45)],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 18 : 24,
+        vertical: isCompact ? 18 : 20,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Safety First.\nEvery Ride.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isCompact ? 28 : 42,
+              height: 0.95,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Wear your helmet.\nDeliver safely.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.96),
+              fontSize: isCompact ? 18 : 24,
+              height: 1.15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {},
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.brandYellow,
+                foregroundColor: AppTheme.darkGreen,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                textStyle: TextStyle(
+                  fontSize: isCompact ? 18 : 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: const Text('Start Delivering Safely'),
+            ),
+          ),
+        ],
       ),
     );
   }
