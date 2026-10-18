@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:myshopzy_rider/app/rider_shell.dart';
 import 'package:myshopzy_rider/core/models/demo_delivery.dart';
 import 'package:myshopzy_rider/core/network/rider_api_client.dart';
 import 'package:myshopzy_rider/core/state/availability_store.dart';
