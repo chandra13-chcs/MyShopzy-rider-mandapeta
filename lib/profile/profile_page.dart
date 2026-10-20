@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/state/availability_store.dart';
+import '../core/state/new_order_alert.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/status_badge.dart';
 import '../help_support/help_support_page.dart';
@@ -8,9 +9,14 @@ import '../settings/settings_page.dart';
 import 'rider_profile_demo_data.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({required this.availabilityStore, super.key});
+  const ProfilePage({
+    required this.availabilityStore,
+    this.newOrderAlert,
+    super.key,
+  });
 
   final AvailabilityStore availabilityStore;
+  final NewOrderAlert? newOrderAlert;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -454,7 +460,8 @@ class _ProfilePageState extends State<ProfilePage> {
             key: const ValueKey('profile-settings'),
             icon: Icons.tune_rounded,
             title: 'Settings',
-            onTap: () => _openPage(const SettingsPage()),
+            onTap: () =>
+                _openPage(SettingsPage(newOrderAlert: widget.newOrderAlert)),
           ),
         ],
       ),

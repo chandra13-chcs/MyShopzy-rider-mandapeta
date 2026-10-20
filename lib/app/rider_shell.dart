@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/state/availability_store.dart';
 import '../core/state/new_order_alert.dart';
@@ -19,19 +20,30 @@ import '../orders/orders_page.dart';
 import '../profile/profile_page.dart';
 
 class RiderShell extends StatefulWidget {
-  const RiderShell({this.apiClient, super.key});
+  const RiderShell({
+    this.apiClient,
+    this.showDemoOrder = false,
+    this.demoRiderLocation,
+    super.key,
+  });
 
   final RiderApiClient? apiClient;
+  final bool showDemoOrder;
+  final LatLng? demoRiderLocation;
 
   @override
   State<RiderShell> createState() => _RiderShellState();
 }
 
-class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
+class _RiderShellState extends State<RiderShell>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   int _selectedIndex = 0;
   bool _isForeground = true;
   bool _incomingDialogShowing = false;
   String? _presentedOfferToken;
+  bool _demoOfferInitialized = false;
+  late final AnimationController _tabTransitionController;
+  double _tabSlideDirection = 1;
 
   late final _availabilityStore = AvailabilityStore(
     initialStatus: widget.apiClient == null
@@ -41,31 +53,55 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   );
   late final _offerStore = OrderOfferStore(
     availabilityStore: _availabilityStore,
-    activeDelivery: widget.apiClient == null
+    activeDelivery: widget.showDemoOrder
+        ? null
+        : widget.apiClient == null
         ? HomeDemoData().activeDelivery
         : null,
-    offer: widget.apiClient == null ? DemoDelivery.newOffer : null,
+    offer: widget.showDemoOrder
+        ? null
+        : widget.apiClient == null
+        ? DemoDelivery.newOffer
+        : null,
     apiClient: widget.apiClient,
   );
-  late final _gigRepository = widget.apiClient == null
-      ? DemoGigRepository()
-      : const UnavailableGigRepository();
+  late final _gigRepository = DemoGigRepository();
   late final _newOrderAlert = NewOrderAlert();
   late final _pages = [
     HomePage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     OrdersPage(availabilityStore: _availabilityStore, offerStore: _offerStore),
     EarningsPage(offerStore: _offerStore),
     GigsPage(availabilityStore: _availabilityStore, repository: _gigRepository),
-    ProfilePage(availabilityStore: _availabilityStore),
+    ProfilePage(
+      availabilityStore: _availabilityStore,
+      newOrderAlert: _newOrderAlert,
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
+    _tabTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    )..value = 1;
     WidgetsBinding.instance.addObserver(this);
     _offerStore.addListener(_handleOfferStoreChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (widget.showDemoOrder && widget.apiClient == null) {
+        _offerStore.requireDemoOffersNearRider();
+        final location = widget.demoRiderLocation;
+        if (location == null) {
+          unawaited(_availabilityStore.startLocalLocationTracking());
+        } else {
+          _offerStore.setDemoOfferForRiderLocation(
+            latitude: location.latitude,
+            longitude: location.longitude,
+          );
+          _demoOfferInitialized = true;
+        }
+      }
       if (widget.apiClient != null) {
         unawaited(_offerStore.refreshAvailableOrders());
         unawaited(_offerStore.refreshEarnings());
@@ -88,6 +124,21 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   }
 
   void _handleOfferStoreChanged() {
+    if (widget.showDemoOrder &&
+        !_demoOfferInitialized &&
+        _offerStore.offer == null &&
+        _offerStore.activeDelivery == null) {
+      final position = _availabilityStore.lastPosition;
+      if (position != null) {
+        _demoOfferInitialized = true;
+        _offerStore.setDemoOfferForRiderLocation(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        return;
+      }
+    }
+
     if (!_offerStore.canShowOffer) {
       unawaited(_newOrderAlert.stop());
       if (_offerStore.status != OrderOfferStatus.available) {
@@ -100,7 +151,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
           if (!mounted || !_incomingDialogShowing || _offerStore.canShowOffer) {
             return;
           }
-          Navigator.of(context, rootNavigator: true).maybePop();
+          Navigator.of(context, rootNavigator: true).pop();
         });
       }
       return;
@@ -140,7 +191,13 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
     final accepted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => IncomingOrderOfferDialog(offerStore: _offerStore),
+      barrierColor: AppTheme.surface,
+      useSafeArea: false,
+      builder: (_) => IncomingOrderOfferDialog(
+        offerStore: _offerStore,
+        soundNeedsActivation: _newOrderAlert.soundNeedsActivation,
+        onEnableSound: _newOrderAlert.enableSound,
+      ),
     );
     _incomingDialogShowing = false;
     if (_presentedOfferToken == offerToken) {
@@ -164,6 +221,7 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabTransitionController.dispose();
     _offerStore.removeListener(_handleOfferStoreChanged);
     unawaited(_newOrderAlert.dispose());
     _offerStore.dispose();
@@ -181,7 +239,76 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
             if (_availabilityStore.isOverspeeding)
               _OverspeedingBanner(speedKmh: _availabilityStore.speedKmh),
             Expanded(
-              child: IndexedStack(index: _selectedIndex, children: _pages),
+              child: AnimatedBuilder(
+                animation: _tabTransitionController,
+                builder: (context, _) {
+                  final progress = Curves.easeOutCubic.transform(
+                    _tabTransitionController.value,
+                  );
+                  final remaining = 1 - progress;
+                  var rotationX = 0.0;
+                  var rotationY = 0.0;
+                  var rotationZ = 0.0;
+                  var slideX = 0.0;
+                  var slideY = 0.0;
+                  var startScale = 0.96;
+                  switch (_selectedIndex) {
+                    case 0:
+                      rotationZ = -0.045;
+                      rotationY = 0.08 * _tabSlideDirection;
+                      slideY = 30;
+                      startScale = 0.97;
+                      break;
+                    case 1:
+                      rotationY = -0.34 * _tabSlideDirection;
+                      slideX = 58 * _tabSlideDirection;
+                      break;
+                    case 2:
+                      rotationX = 0.3;
+                      slideY = 52;
+                      startScale = 0.95;
+                      break;
+                    case 3:
+                      rotationY = 0.36 * _tabSlideDirection;
+                      rotationZ = 0.025 * _tabSlideDirection;
+                      slideX = -58 * _tabSlideDirection;
+                      startScale = 0.95;
+                      break;
+                    case 4:
+                      rotationX = -0.28;
+                      rotationZ = 0.035;
+                      slideY = -44;
+                      startScale = 0.94;
+                      break;
+                  }
+                  final scale = startScale + ((1 - startScale) * progress);
+                  final transform = Matrix4.identity()
+                    ..setEntry(3, 2, 0.001)
+                    ..translateByDouble(
+                      slideX * remaining,
+                      slideY * remaining,
+                      0,
+                      1,
+                    )
+                    ..rotateX(rotationX * remaining)
+                    ..rotateY(rotationY * remaining)
+                    ..rotateZ(rotationZ * remaining)
+                    ..scaleByDouble(scale, scale, scale, 1);
+                  return ClipRect(
+                    child: Opacity(
+                      opacity: progress,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: transform,
+                        child: IndexedStack(
+                          index: _selectedIndex,
+                          children: _pages,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -190,7 +317,14 @@ class _RiderShellState extends State<RiderShell> with WidgetsBindingObserver {
         selectedIndex: _selectedIndex,
         animationDuration: const Duration(milliseconds: 200),
         onDestinationSelected: (index) {
+          if (index == _selectedIndex) return;
+          _tabSlideDirection = index > _selectedIndex ? 1 : -1;
           setState(() => _selectedIndex = index);
+          if (MediaQuery.disableAnimationsOf(context)) {
+            _tabTransitionController.value = 1;
+          } else {
+            _tabTransitionController.forward(from: 0);
+          }
         },
         destinations: const [
           NavigationDestination(

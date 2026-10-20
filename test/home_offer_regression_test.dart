@@ -13,6 +13,7 @@ import 'package:myshopzy_rider/core/state/new_order_alert.dart';
 import 'package:myshopzy_rider/core/state/order_offer_store.dart';
 import 'package:myshopzy_rider/core/theme/app_theme.dart';
 import 'package:myshopzy_rider/home/home_page.dart';
+import 'package:myshopzy_rider/settings/settings_page.dart';
 
 void main() {
   test(
@@ -195,6 +196,45 @@ void main() {
     expect(summaryCard.color, Colors.white);
   });
 
+  testWidgets('safety banner opens the rider safety checklist', (tester) async {
+    final availability = AvailabilityStore();
+    final store = OrderOfferStore(availabilityStore: availability);
+    addTearDown(store.dispose);
+    addTearDown(availability.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomePage(availabilityStore: availability, offerStore: store),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Start Delivering Safely'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quick safety check'), findsOneWidget);
+    expect(find.text('Wear and fasten your helmet'), findsOneWidget);
+    expect(find.text('Check your brakes and tires'), findsOneWidget);
+    expect(find.text('Secure your phone before moving'), findsOneWidget);
+    final readyButton = find.widgetWithText(
+      FilledButton,
+      'Ready to ride safely',
+    );
+    expect(tester.widget<FilledButton>(readyButton).onPressed, isNull);
+
+    for (var index = 0; index < 3; index++) {
+      await tester.tap(find.byType(Checkbox).at(index));
+      await tester.pump();
+    }
+
+    expect(tester.widget<FilledButton>(readyButton).onPressed, isNotNull);
+    await tester.tap(readyButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Quick safety check'), findsNothing);
+  });
+
   test('new alert revisions can each start a sound alert', () async {
     var soundCount = 0;
     final alert = NewOrderAlert(
@@ -211,5 +251,48 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(soundCount, 2);
+  });
+
+  testWidgets('sound setting mutes and unmutes future order alerts', (
+    tester,
+  ) async {
+    final playback = Completer<void>();
+    var playCount = 0;
+    final alert = NewOrderAlert(
+      requireUserGestureForSound: false,
+      playSound: () {
+        playCount++;
+        return playback.future;
+      },
+      vibrate: () async {},
+    );
+    addTearDown(alert.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: SettingsPage(newOrderAlert: alert)),
+    );
+    final soundTile = find.byKey(const ValueKey('settings-sound'));
+    final soundSwitch = find.descendant(
+      of: soundTile,
+      matching: find.byType(Switch),
+    );
+
+    await tester.tap(soundSwitch);
+    await tester.pumpAndSettle();
+    expect(alert.soundEnabled, isFalse);
+
+    alert.start('muted-order');
+    await tester.pump();
+    expect(playCount, 0);
+
+    await alert.stop();
+    await tester.tap(soundSwitch);
+    await tester.pumpAndSettle();
+    expect(alert.soundEnabled, isTrue);
+
+    alert.start('unmuted-order');
+    await tester.pump();
+    expect(playCount, 1);
+    await alert.stop();
   });
 }

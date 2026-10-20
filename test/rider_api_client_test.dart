@@ -16,6 +16,63 @@ import 'package:myshopzy_rider/delivery/delivery_page.dart';
 void main() {
   const orderId = 'd1ca6b39-b9d9-423b-b93b-3e513f232d9a';
 
+  test('detects store arrival from rider GPS coordinates', () {
+    const delivery = DemoDelivery(
+      orderId: 'arrival-test',
+      store: 'Green Basket',
+      customer: 'Customer',
+      pickup: '12 Market Road',
+      drop: 'Lakshmi Nagar',
+      distanceKm: 4,
+      payout: 85,
+      status: 'getting_packed',
+      pickupLatitude: 16.87,
+      pickupLongitude: 81.93,
+      dropLatitude: 16.88,
+      dropLongitude: 81.94,
+    );
+    final availability = AvailabilityStore();
+    final store = OrderOfferStore(
+      availabilityStore: availability,
+      activeDelivery: null,
+      offer: delivery,
+    );
+    expect(store.acceptOffer(), isTrue);
+    addTearDown(store.dispose);
+    addTearDown(availability.dispose);
+
+    final outsideRadius = Position(
+      latitude: 16.872,
+      longitude: 81.93,
+      timestamp: DateTime(2026),
+      accuracy: 1,
+      altitude: 0,
+      altitudeAccuracy: 1,
+      heading: 0,
+      headingAccuracy: 1,
+      speed: 0,
+      speedAccuracy: 1,
+    );
+    final atStore = Position(
+      latitude: 16.87,
+      longitude: 81.93,
+      timestamp: DateTime(2026),
+      accuracy: 1,
+      altitude: 0,
+      altitudeAccuracy: 1,
+      heading: 0,
+      headingAccuracy: 1,
+      speed: 0,
+      speedAccuracy: 1,
+    );
+
+    expect(store.checkPickupArrival(delivery, outsideRadius), isFalse);
+    expect(store.pickupStatus, PickupStatus.goingToPickup);
+    expect(store.checkPickupArrival(delivery, atStore), isTrue);
+    expect(store.pickupStatus, PickupStatus.reachedPickup);
+    expect(store.checkPickupArrival(delivery, atStore), isFalse);
+  });
+
   test(
     'uses Rider API paths, JSON headers, and the backend demo rider UUID',
     () async {
@@ -100,6 +157,9 @@ void main() {
                   'drop': {'formattedAddress': '12 Market Road'},
                   'customerName': 'Rider Customer',
                   'customerPhone': '+911234567890',
+                  'items': [
+                    {'name': 'Fresh vegetables', 'quantity': 2},
+                  ],
                   'pickupLatitude': -16.87,
                   'pickupLongitude': 81.93,
                   'dropLatitude': 16.88,
@@ -123,10 +183,116 @@ void main() {
     expect(orders.single.payout, 85);
     expect(orders.single.customer, 'Rider Customer');
     expect(orders.single.customerPhone, '+911234567890');
+    expect(orders.single.items.single.name, 'Fresh vegetables');
+    expect(orders.single.items.single.quantity, 2);
     expect(orders.single.pickupLatitude, -16.87);
     expect(orders.single.dropLongitude, 81.94);
     expect(orders.single.totalDistanceLabel, 'Not provided');
   });
+
+  test(
+    'only offers API pickups within 2 km of the rider GPS position',
+    () async {
+      final client = RiderApiClient.forTesting(
+        baseUri: Uri.parse('http://localhost:3000'),
+        httpClient: MockClient((_) async {
+          return http.Response(
+            jsonEncode({
+              'data': {
+                'orders': [
+                  {
+                    'orderId': 'too-far',
+                    'store': 'Far Store',
+                    'pickup': 'Far pickup',
+                    'drop': 'Far drop',
+                    'pickupLatitude': 16.90,
+                    'pickupLongitude': 81.93,
+                  },
+                  {
+                    'orderId': 'no-coordinates',
+                    'store': 'Unknown Store',
+                    'pickup': 'Unknown pickup',
+                    'drop': 'Unknown drop',
+                  },
+                  {
+                    'orderId': 'nearby',
+                    'store': 'Nearby Store',
+                    'pickup': 'Nearby pickup',
+                    'drop': 'Nearby drop',
+                    'pickupLatitude': 16.88,
+                    'pickupLongitude': 81.93,
+                  },
+                ],
+              },
+            }),
+            200,
+          );
+        }),
+      );
+      final availability = AvailabilityStore(
+        initialPosition: Position(
+          latitude: 16.87,
+          longitude: 81.93,
+          timestamp: DateTime(2026),
+          accuracy: 1,
+          altitude: 0,
+          altitudeAccuracy: 1,
+          heading: 0,
+          headingAccuracy: 1,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
+      );
+      final store = OrderOfferStore(
+        availabilityStore: availability,
+        activeDelivery: null,
+        offer: null,
+        apiClient: client,
+      );
+      addTearDown(store.dispose);
+      addTearDown(availability.dispose);
+
+      await store.refreshAvailableOrders();
+
+      expect(store.offer?.orderId, 'nearby');
+      expect(store.offer!.pickupDistanceKm, lessThanOrEqualTo(2));
+    },
+  );
+
+  test(
+    'demo location tracking updates the position used for nearby offers',
+    () async {
+      final positions = StreamController<Position>();
+      Position makePosition(double latitude) => Position(
+        latitude: latitude,
+        longitude: 81.93,
+        timestamp: DateTime(2026),
+        accuracy: 1,
+        altitude: 0,
+        altitudeAccuracy: 1,
+        heading: 0,
+        headingAccuracy: 1,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+      final availability = AvailabilityStore(
+        getCurrentPosition: () async => makePosition(16.87),
+        positionStream: () => positions.stream,
+      );
+      addTearDown(positions.close);
+      addTearDown(availability.dispose);
+
+      await availability.startLocalLocationTracking();
+      expect(availability.lastPosition?.latitude, 16.87);
+
+      positions.add(makePosition(16.88));
+      await Future<void>.delayed(Duration.zero);
+      expect(availability.lastPosition?.latitude, 16.88);
+
+      availability.setAvailable(false);
+      expect(availability.lastPosition, isNull);
+    },
+  );
 
   test('reports API errors with the backend error code and message', () async {
     final client = RiderApiClient.forTesting(
@@ -200,6 +366,10 @@ void main() {
                       'store': 'Green Basket',
                       'pickup': {'locality': 'Mandapeta'},
                       'drop': {'formattedAddress': '12 Market Road'},
+                      'pickupLatitude': 16.87,
+                      'pickupLongitude': 81.93,
+                      'dropLatitude': 16.88,
+                      'dropLongitude': 81.94,
                     },
                   ],
                 },
@@ -232,6 +402,18 @@ void main() {
         }),
       );
       final availability = AvailabilityStore(
+        initialPosition: Position(
+          latitude: 16.87,
+          longitude: 81.93,
+          timestamp: DateTime(2026),
+          accuracy: 1,
+          altitude: 0,
+          altitudeAccuracy: 1,
+          heading: 0,
+          headingAccuracy: 1,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
         checkConnectivity: () async => [ConnectivityResult.wifi],
         connectivityChanges: const Stream.empty(),
       );
@@ -277,6 +459,10 @@ void main() {
         'drop': {'formattedAddress': '12 Market Road'},
         'customerName': 'Customer',
         'customerPhone': '+911234567890',
+        'pickupLatitude': 16.87,
+        'pickupLongitude': 81.93,
+        'dropLatitude': 16.88,
+        'dropLongitude': 81.94,
         'payout': 85,
       };
       final client = RiderApiClient.forTesting(
@@ -320,6 +506,18 @@ void main() {
       );
       final availability = AvailabilityStore(
         initialStatus: AvailabilityStatus.available,
+        initialPosition: Position(
+          latitude: 16.87,
+          longitude: 81.93,
+          timestamp: DateTime(2026),
+          accuracy: 1,
+          altitude: 0,
+          altitudeAccuracy: 1,
+          heading: 0,
+          headingAccuracy: 1,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
         checkConnectivity: () async => [ConnectivityResult.wifi],
         connectivityChanges: const Stream.empty(),
       );
@@ -345,8 +543,7 @@ void main() {
       expect(store.reachStore(delivery), isTrue);
       expect(store.openOrderDetails(delivery), isTrue);
       expect(await store.confirmPickup(delivery, '3d9a'), isFalse);
-      expect(await store.confirmPickup(delivery, '2329'), isTrue);
-      expect(await store.startDelivery(delivery), isTrue);
+      expect(await store.confirmPickupAndStartDelivery(delivery), isTrue);
       expect(store.arriveAtCustomer(delivery), isTrue);
       expect(store.handOverOrder(delivery), isTrue);
       expect(await store.completeDelivery(delivery), isTrue);
@@ -491,14 +688,40 @@ void main() {
       ),
     );
     expect(find.byKey(const ValueKey('delivery-route-map')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('route-map-open-google-maps')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('open-full-route-google-maps')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Open pickup + delivery route in Google Maps'),
+      findsOneWidget,
+    );
     expect(find.text('Call Store'), findsOneWidget);
     expect(find.text('Locating rider...'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('navigate-to-pickup-google-maps')),
+      findsOneWidget,
+    );
+    expect(find.text('Open Google Maps to Pickup'), findsOneWidget);
 
     store.reachStore(delivery);
     store.openOrderDetails(delivery);
     expect(store.verifyPickup(delivery, '1234'), isTrue);
     expect(store.continueToDelivery(delivery), isTrue);
     await tester.pump();
+    expect(
+      find.byKey(const ValueKey('route-map-open-google-maps')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('navigate-to-customer-google-maps')),
+      findsOneWidget,
+    );
+    expect(find.text('Open Google Maps to Customer'), findsOneWidget);
     expect(find.text('Call'), findsOneWidget);
   });
 
@@ -938,6 +1161,10 @@ void main() {
                       'store': 'Green Basket',
                       'pickup': {'locality': 'Mandapeta'},
                       'drop': {'formattedAddress': '12 Market Road'},
+                      'pickupLatitude': 16.87,
+                      'pickupLongitude': 81.93,
+                      'dropLatitude': 16.88,
+                      'dropLongitude': 81.94,
                     },
                   ],
                 },
@@ -971,6 +1198,18 @@ void main() {
       );
       final availability = AvailabilityStore(
         initialStatus: AvailabilityStatus.available,
+        initialPosition: Position(
+          latitude: 16.87,
+          longitude: 81.93,
+          timestamp: DateTime(2026),
+          accuracy: 1,
+          altitude: 0,
+          altitudeAccuracy: 1,
+          heading: 0,
+          headingAccuracy: 1,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
         checkConnectivity: () async => [ConnectivityResult.none],
         connectivityChanges: connectivity.stream,
       );

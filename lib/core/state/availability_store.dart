@@ -13,12 +13,14 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   AvailabilityStore({
     AvailabilityStatus initialStatus = AvailabilityStatus.available,
     this.apiClient,
+    Position? initialPosition,
     Future<Position> Function()? getCurrentPosition,
     Stream<Position> Function()? positionStream,
     Future<void> Function()? playOverspeedSound,
     this.checkConnectivity,
     this.connectivityChanges,
-  }) : _getCurrentPosition = getCurrentPosition ?? _getDevicePosition,
+  }) : _lastPosition = initialPosition,
+       _getCurrentPosition = getCurrentPosition ?? _getDevicePosition,
        _positionStream =
            positionStream ??
            (getCurrentPosition == null ? _getDevicePositionStream : null),
@@ -60,6 +62,7 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   bool _locationTrackingRequested = false;
   bool _isFlushingLocations = false;
   bool _isFlushingAvailability = false;
+  bool _localTrackingEnabled = false;
   bool? _queuedAvailabilityUpdate;
   bool isConnected = true;
   Position? get lastPosition => _lastPosition;
@@ -149,7 +152,20 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
       _queuedAvailabilityUpdate = true;
     }
     value = nextValue;
-    if (apiClient == null) return;
+    if (apiClient == null) {
+      if (_localTrackingEnabled) {
+        if (isAvailable) {
+          _locationTrackingRequested = true;
+          unawaited(_startLocationTracking(generation));
+        } else {
+          _locationTrackingRequested = false;
+          _lastPosition = null;
+          unawaited(_stopLocationTracking());
+          notifyListeners();
+        }
+      }
+      return;
+    }
     if (isAvailable) {
       _hasPostedLocation = false;
       _locationTrackingRequested = true;
@@ -165,11 +181,19 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
 
   void toggle() => setAvailable(!isAvailable);
 
+  Future<void> startLocalLocationTracking() async {
+    if (apiClient != null || !isOnline || _locationTrackingRequested) return;
+    _localTrackingEnabled = true;
+    _locationTrackingRequested = true;
+    await _startLocationTracking(_requestGeneration);
+  }
+
   Future<void> _startLocationTracking(int generation) async {
     if (_startingGeneration == generation ||
         _positionSubscription != null ||
         !isOnline ||
-        !isConnected) {
+        !isConnected ||
+        (!_locationTrackingRequested && apiClient == null)) {
       return;
     }
     _startingGeneration = generation;
@@ -208,12 +232,16 @@ class AvailabilityStore extends ValueNotifier<AvailabilityStatus> {
   }
 
   Future<void> _postPosition(Position position, int generation) async {
-    if (generation != _requestGeneration || !isOnline || apiClient == null) {
+    if (generation != _requestGeneration || !isOnline) {
       return;
     }
 
     _updateSpeedWarning(position);
     _lastPosition = position;
+    if (apiClient == null) {
+      notifyListeners();
+      return;
+    }
     _pendingLocation = position;
     if (!isConnected) return;
     await _flushQueuedLocations(generation);

@@ -21,7 +21,9 @@ class EarningsPage extends StatelessWidget {
         actions: [
           IconButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const HistoryPage()),
+              MaterialPageRoute<void>(
+                builder: (_) => HistoryPage(offerStore: offerStore),
+              ),
             ),
             tooltip: 'Delivery history',
             icon: const Icon(Icons.history_rounded),
@@ -171,7 +173,9 @@ class EarningsPage extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const HistoryPage()),
+                MaterialPageRoute<void>(
+                  builder: (_) => HistoryPage(offerStore: offerStore),
+                ),
               ),
               icon: const Icon(Icons.history_rounded),
               label: const Text('View delivery history'),

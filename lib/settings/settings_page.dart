@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/new_order_alert.dart';
 import '../core/theme/app_theme.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({this.newOrderAlert, super.key});
+
+  final NewOrderAlert? newOrderAlert;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -14,6 +17,13 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _sound = true;
   bool _vibration = true;
   bool _darkModeDemo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sound = widget.newOrderAlert?.soundEnabled ?? true;
+    _vibration = widget.newOrderAlert?.vibrationEnabled ?? true;
+  }
 
   Future<void> _showInformation(String title, String message) =>
       showDialog<void>(
@@ -59,9 +69,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: Icons.volume_up_outlined,
                   ),
                   title: const Text('Sound'),
-                  subtitle: const Text('Local demo preference'),
+                  subtitle: const Text('Play incoming-order alerts'),
                   value: _sound,
-                  onChanged: (value) => setState(() => _sound = value),
+                  onChanged: (value) {
+                    setState(() => _sound = value);
+                    widget.newOrderAlert?.setSoundEnabled(value);
+                  },
                 ),
                 const _TileDivider(),
                 SwitchListTile.adaptive(
@@ -70,9 +83,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: Icons.vibration_rounded,
                   ),
                   title: const Text('Vibration'),
-                  subtitle: const Text('Local demo preference'),
+                  subtitle: const Text('Vibrate for incoming orders'),
                   value: _vibration,
-                  onChanged: (value) => setState(() => _vibration = value),
+                  onChanged: (value) {
+                    setState(() => _vibration = value);
+                    widget.newOrderAlert?.setVibrationEnabled(value);
+                  },
                 ),
                 const _TileDivider(),
                 SwitchListTile.adaptive(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/order_offer_store.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/status_badge.dart';
 import '../earnings/rider_earnings_demo_data.dart';
@@ -7,7 +8,9 @@ import '../earnings/rider_earnings_demo_data.dart';
 enum _HistoryStatusFilter { all, completed, cancelled }
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({this.offerStore, super.key});
+
+  final OrderOfferStore? offerStore;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -40,6 +43,18 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final store = widget.offerStore;
+    if (store == null) return _buildHistory(context, const []);
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, child) => _buildHistory(context, store.rejectedOffers),
+    );
+  }
+
+  Widget _buildHistory(
+    BuildContext context,
+    List<RejectedOrderOffer> rejectedOffers,
+  ) {
     final history = _filteredHistory;
     final completedCount = RiderEarningsDemoData.history
         .where((item) => item.status == DeliveryHistoryStatus.completed)
@@ -120,6 +135,44 @@ class _HistoryPageState extends State<HistoryPage> {
                     ),
                   ),
                 ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Rejected orders', style: AppTheme.sectionTitle),
+                ),
+                Container(
+                  key: const ValueKey('rejected-order-count'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.errorSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${rejectedOffers.length} rejected',
+                    style: const TextStyle(
+                      color: AppTheme.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (rejectedOffers.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Text('Orders you reject will appear here.'),
+                ),
+              )
+            else
+              for (final rejectedOffer in rejectedOffers.reversed)
+                _RejectedOrderCard(rejectedOffer: rejectedOffer),
           ],
         ),
       ),
@@ -139,6 +192,65 @@ class _HistoryPageState extends State<HistoryPage> {
     selected: _periodFilter == period,
     onSelected: (_) => setState(() => _periodFilter = period),
   );
+}
+
+class _RejectedOrderCard extends StatelessWidget {
+  const _RejectedOrderCard({required this.rejectedOffer});
+
+  final RejectedOrderOffer rejectedOffer;
+
+  @override
+  Widget build(BuildContext context) {
+    final delivery = rejectedOffer.delivery;
+    final rejectedAt = rejectedOffer.rejectedAt.toLocal();
+    final date = MaterialLocalizations.of(context).formatMediumDate(rejectedAt);
+    final time = MaterialLocalizations.of(context)
+        .formatTimeOfDay(TimeOfDay.fromDateTime(rejectedAt));
+
+    return Card(
+      key: ValueKey('rejected-order-${delivery.orderId}'),
+      margin: const EdgeInsets.only(bottom: 9),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CircleAvatar(
+              backgroundColor: AppTheme.errorSoft,
+              child: Icon(Icons.swipe_left_rounded, color: AppTheme.error),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(delivery.orderId, style: AppTheme.cardTitle),
+                  const SizedBox(height: 3),
+                  Text(delivery.store, style: AppTheme.bodyText),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Pickup · ${delivery.pickup}',
+                    style: AppTheme.secondaryTextStyle,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Rejected $date · $time',
+                    style: AppTheme.secondaryTextStyle,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            StatusBadge(
+              label: 'Rejected',
+              color: AppTheme.error,
+              backgroundColor: AppTheme.errorSoft,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class DeliveryHistoryDetailsPage extends StatelessWidget {

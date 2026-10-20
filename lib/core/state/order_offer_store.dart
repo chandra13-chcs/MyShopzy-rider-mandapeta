@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../models/demo_delivery.dart';
 import '../network/rider_api_client.dart';
@@ -18,6 +19,13 @@ enum PickupStatus {
 }
 
 enum DeliveryStatus { goingToCustomer, reachedCustomer, handOver, delivered }
+
+class RejectedOrderOffer {
+  const RejectedOrderOffer({required this.delivery, required this.rejectedAt});
+
+  final DemoDelivery delivery;
+  final DateTime rejectedAt;
+}
 
 extension PickupStatusLabel on PickupStatus {
   String get label => switch (this) {
@@ -39,6 +47,9 @@ extension DeliveryStatusLabel on DeliveryStatus {
 }
 
 class OrderOfferStore extends ChangeNotifier {
+  static const pickupArrivalRadiusMeters = 100;
+  static const maximumPickupDistanceKm = 2.0;
+
   OrderOfferStore({
     required this.availabilityStore,
     DemoDelivery? activeDelivery = DemoDelivery.batchThreeActive,
@@ -77,10 +88,12 @@ class OrderOfferStore extends ChangeNotifier {
   int? todayCompletedDeliveries;
   int? _lastDeliveredPayoutMinor;
   String? earningsErrorMessage;
+  final List<RejectedOrderOffer> _rejectedOffers = [];
   Timer? _timer;
   Timer? _pollTimer;
   bool _disposed = false;
   bool _isFlushingQueuedStatuses = false;
+  bool _demoOffersUseRiderLocation = false;
   int _offerRevision = 0;
   final List<({String orderId, String status})> _queuedOrderStatuses = [];
   final Set<String> _rejectedOrderIds = {};
@@ -88,6 +101,8 @@ class OrderOfferStore extends ChangeNotifier {
   bool get isBusy => activeDelivery != null;
   int get queuedOrderStatusCount => _queuedOrderStatuses.length;
   int get offerRevision => _offerRevision;
+  List<RejectedOrderOffer> get rejectedOffers =>
+      List.unmodifiable(_rejectedOffers);
 
   String get activeDeliveryStatus => pickupStatus == PickupStatus.onTheWay
       ? deliveryStatus.label
@@ -111,6 +126,15 @@ class OrderOfferStore extends ChangeNotifier {
       secondsRemaining > 0;
 
   void _handleAvailabilityChanged() {
+    final position = availabilityStore.lastPosition;
+    final delivery = activeDelivery;
+    if (position != null && delivery != null) {
+      if (pickupStatus == PickupStatus.goingToPickup) {
+        checkPickupArrival(delivery, position);
+      } else if (pickupStatus == PickupStatus.onTheWay) {
+        checkCustomerArrival(delivery, position);
+      }
+    }
     if (apiClient != null) {
       if (availabilityStore.isOnlineForOrders) {
         unawaited(refreshAvailableOrders());
@@ -158,10 +182,15 @@ class OrderOfferStore extends ChangeNotifier {
       if (_disposed || !availabilityStore.isOnlineForOrders) return;
       DemoDelivery? nextOffer;
       for (final order in orders) {
-        if (!_rejectedOrderIds.contains(order.orderId)) {
-          nextOffer = _estimateDistances(order);
-          break;
+        if (_rejectedOrderIds.contains(order.orderId)) continue;
+        final nearbyOrder = _estimateDistances(order);
+        final pickupDistance = nearbyOrder.pickupDistanceKm;
+        if (pickupDistance == null ||
+            pickupDistance > maximumPickupDistanceKm) {
+          continue;
         }
+        nextOffer = nearbyOrder;
+        break;
       }
       offer = nextOffer;
       if (nextOffer != null) _offerRevision++;
@@ -223,6 +252,10 @@ class OrderOfferStore extends ChangeNotifier {
     activeDelivery = offer;
     pickupStatus = PickupStatus.goingToPickup;
     deliveryStatus = DeliveryStatus.goingToCustomer;
+    final position = availabilityStore.lastPosition;
+    if (offer!.isLocationDemo && position != null) {
+      checkPickupArrival(offer!, position);
+    }
     notifyListeners();
     return true;
   }
@@ -295,14 +328,38 @@ class OrderOfferStore extends ChangeNotifier {
 
     _timer?.cancel();
     _timer = null;
-    if (apiClient != null) {
-      _rejectedOrderIds.add(offer!.orderId);
-      offer = null;
+    final rejectedOffer = offer!;
+    if (_rejectedOrderIds.add(rejectedOffer.orderId)) {
+      _rejectedOffers.add(
+        RejectedOrderOffer(delivery: rejectedOffer, rejectedAt: DateTime.now()),
+      );
     }
+    offer = null;
     status = OrderOfferStatus.rejected;
     if (apiClient != null) unawaited(refreshAvailableOrders());
     notifyListeners();
     return true;
+  }
+
+  void setDemoOfferForRiderLocation({
+    required double latitude,
+    required double longitude,
+  }) {
+    if (apiClient != null || activeDelivery != null || _disposed) return;
+    _demoOffersUseRiderLocation = true;
+    offer = DemoDelivery.nearbyDemoOffer(
+      riderLatitude: latitude,
+      riderLongitude: longitude,
+    );
+    status = OrderOfferStatus.available;
+    secondsRemaining = offerDuration.inSeconds;
+    _offerRevision++;
+    _updateTimer();
+    notifyListeners();
+  }
+
+  void requireDemoOffersNearRider() {
+    if (apiClient == null) _demoOffersUseRiderLocation = true;
   }
 
   bool completeActiveDelivery(DemoDelivery delivery) {
@@ -333,6 +390,43 @@ class OrderOfferStore extends ChangeNotifier {
     PickupStatus.reachedPickup,
   );
 
+  bool checkPickupArrival(DemoDelivery delivery, Position position) {
+    if (delivery.pickupLatitude == null ||
+        delivery.pickupLongitude == null ||
+        activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.goingToPickup) {
+      return false;
+    }
+
+    final distanceMeters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      delivery.pickupLatitude!,
+      delivery.pickupLongitude!,
+    );
+    return distanceMeters <= pickupArrivalRadiusMeters && reachStore(delivery);
+  }
+
+  bool checkCustomerArrival(DemoDelivery delivery, Position position) {
+    if (!delivery.isLocationDemo ||
+        delivery.dropLatitude == null ||
+        delivery.dropLongitude == null ||
+        activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.onTheWay ||
+        deliveryStatus != DeliveryStatus.goingToCustomer) {
+      return false;
+    }
+
+    final distanceMeters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      delivery.dropLatitude!,
+      delivery.dropLongitude!,
+    );
+    return distanceMeters <= pickupArrivalRadiusMeters &&
+        arriveAtCustomer(delivery);
+  }
+
   bool openOrderDetails(DemoDelivery delivery) => _advancePickup(
     delivery,
     PickupStatus.reachedPickup,
@@ -362,6 +456,8 @@ class OrderOfferStore extends ChangeNotifier {
 
     pickupStatus = PickupStatus.onTheWay;
     deliveryStatus = DeliveryStatus.goingToCustomer;
+    final position = availabilityStore.lastPosition;
+    if (position != null) checkCustomerArrival(delivery, position);
     notifyListeners();
     return true;
   }
@@ -384,6 +480,20 @@ class OrderOfferStore extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> confirmPickupAndStartDelivery(DemoDelivery delivery) async {
+    if (activeDelivery?.orderId != delivery.orderId ||
+        pickupStatus != PickupStatus.orderDetails ||
+        isUpdatingOrderStatus) {
+      return false;
+    }
+    if (!await _updateRemoteStatus(delivery.orderId, 'picked_up')) {
+      return false;
+    }
+    pickupStatus = PickupStatus.pickedUp;
+    notifyListeners();
+    return startDelivery(delivery);
+  }
+
   Future<bool> startDelivery(DemoDelivery delivery) async {
     if (activeDelivery?.orderId != delivery.orderId ||
         pickupStatus != PickupStatus.pickedUp ||
@@ -395,6 +505,8 @@ class OrderOfferStore extends ChangeNotifier {
     }
     pickupStatus = PickupStatus.onTheWay;
     deliveryStatus = DeliveryStatus.goingToCustomer;
+    final position = availabilityStore.lastPosition;
+    if (position != null) checkCustomerArrival(delivery, position);
     notifyListeners();
     return true;
   }
@@ -561,7 +673,20 @@ class OrderOfferStore extends ChangeNotifier {
 
     _timer?.cancel();
     _timer = null;
-    offer ??= DemoDelivery.newOffer;
+    if (offer == null && _demoOffersUseRiderLocation) {
+      final position = availabilityStore.lastPosition;
+      if (position == null) {
+        errorMessage = 'Enable location to load an order near you.';
+        notifyListeners();
+        return false;
+      }
+      offer = DemoDelivery.nearbyDemoOffer(
+        riderLatitude: position.latitude,
+        riderLongitude: position.longitude,
+      );
+    } else {
+      offer ??= DemoDelivery.newOffer;
+    }
     _offerRevision++;
     secondsRemaining = offerDuration.inSeconds;
     status = OrderOfferStatus.available;

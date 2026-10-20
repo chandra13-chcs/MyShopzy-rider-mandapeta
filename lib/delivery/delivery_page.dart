@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -58,10 +57,20 @@ class DeliveryPage extends StatelessWidget {
           Text('Order ${delivery.orderId}', style: AppTheme.screenTitle),
           const SizedBox(height: 5),
           Text(
-            'Grocery delivery · ${delivery.totalDistanceLabel}',
+            delivery.isLocationDemo
+                ? 'Local demo · pickup and drop at your current location'
+                : 'Grocery delivery · ${delivery.totalDistanceLabel}',
             style: AppTheme.secondaryTextStyle,
           ),
           const SizedBox(height: 20),
+          if (isActive) ...[
+            _OrderFlowProgress(
+              delivery: delivery,
+              pickupStatus: pickupStatus!,
+              deliveryStatus: deliveryStatus!,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (store != null && store.queuedOrderStatusCount > 0) ...[
             _SyncPendingNotice(count: store.queuedOrderStatusCount),
             const SizedBox(height: 12),
@@ -70,7 +79,35 @@ class DeliveryPage extends StatelessWidget {
             _RouteMapCard(
               delivery: delivery,
               riderPosition: store?.availabilityStore.lastPosition,
+              pickupStatus: pickupStatus!,
+              offerStore: store!,
               showMapTiles: showMapTiles,
+              onOpenMaps: () => _openNavigation(
+                context,
+                pickupStatus == PickupStatus.pickedUp ||
+                        pickupStatus == PickupStatus.onTheWay
+                    ? delivery.drop
+                    : delivery.pickup,
+                pickupStatus == PickupStatus.pickedUp ||
+                        pickupStatus == PickupStatus.onTheWay
+                    ? delivery.dropLatitude
+                    : delivery.pickupLatitude,
+                pickupStatus == PickupStatus.pickedUp ||
+                        pickupStatus == PickupStatus.onTheWay
+                    ? delivery.dropLongitude
+                    : delivery.pickupLongitude,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('open-full-route-google-maps'),
+              onPressed: () => _openFullRouteInGoogleMaps(context),
+              icon: const Icon(Icons.map_rounded),
+              label: const Text('Open pickup + delivery route in Google Maps'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: AppTheme.surface,
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -99,7 +136,7 @@ class DeliveryPage extends StatelessWidget {
             step: '1',
             title: 'Pickup from store',
             place: delivery.store,
-            address: '${delivery.pickup}, Mandapeta',
+            address: _displayAddress(delivery.pickup),
             distance: delivery.pickupDistanceKm == null
                 ? null
                 : '${delivery.pickupDistanceKm!.toStringAsFixed(1)} km away',
@@ -109,7 +146,7 @@ class DeliveryPage extends StatelessWidget {
             step: '2',
             title: 'Deliver to customer',
             place: delivery.customer,
-            address: '${delivery.drop}, Mandapeta',
+            address: _displayAddress(delivery.drop),
           ),
           const SizedBox(height: 18),
           Card(
@@ -170,14 +207,15 @@ class DeliveryPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             OutlinedButton.icon(
+              key: const ValueKey('navigate-to-pickup-google-maps'),
               onPressed: () => _openNavigation(
                 context,
                 delivery.pickup,
                 delivery.pickupLatitude,
                 delivery.pickupLongitude,
               ),
-              icon: const Icon(Icons.navigation_rounded),
-              label: const Text('Navigate to Store'),
+              icon: const Icon(Icons.map_rounded),
+              label: const Text('Open Google Maps to Pickup'),
             ),
             if (_phoneUri(delivery.storePhone) case final storePhoneUri?) ...[
               const SizedBox(height: 8),
@@ -188,15 +226,27 @@ class DeliveryPage extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-            _primaryAction('Reached Store', () => store.reachStore(delivery)),
+            if (delivery.pickupLatitude == null ||
+                delivery.pickupLongitude == null)
+              _primaryAction('Reached Store', () => store.reachStore(delivery))
+            else
+              const _ArrivalNotice(),
           ],
         );
       case PickupStatus.reachedPickup:
-        return _primaryAction('Order Details', () {
-          store.openOrderDetails(delivery);
-        });
+        return FilledButton.icon(
+          key: const ValueKey('view-pickup-order'),
+          onPressed: () => store.openOrderDetails(delivery),
+          icon: const Icon(Icons.inventory_2_rounded),
+          label: const Text('View pickup order'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(54),
+            backgroundColor: AppTheme.darkGreen,
+            foregroundColor: AppTheme.surface,
+          ),
+        );
       case PickupStatus.orderDetails:
-        return _PickupVerificationForm(delivery: delivery, offerStore: store);
+        return _PickupOrderDetails(delivery: delivery, offerStore: store);
       case PickupStatus.pickedUp:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,14 +285,15 @@ class DeliveryPage extends StatelessWidget {
             _buildCustomerDeliverySummary(context),
             const SizedBox(height: 12),
             OutlinedButton.icon(
+              key: const ValueKey('navigate-to-customer-google-maps'),
               onPressed: () => _openNavigation(
                 context,
                 delivery.drop,
                 delivery.dropLatitude,
                 delivery.dropLongitude,
               ),
-              icon: const Icon(Icons.navigation_rounded),
-              label: const Text('Navigate to Customer'),
+              icon: const Icon(Icons.map_rounded),
+              label: const Text('Open Google Maps to Customer'),
             ),
             const SizedBox(height: 8),
             _primaryAction(
@@ -424,6 +475,31 @@ class DeliveryPage extends StatelessWidget {
     await _openContact(context, uri);
   }
 
+  Future<void> _openFullRouteInGoogleMaps(BuildContext context) async {
+    final pickup = _mapsDestination(
+      delivery.pickup,
+      delivery.pickupLatitude,
+      delivery.pickupLongitude,
+    );
+    final drop = _mapsDestination(
+      delivery.drop,
+      delivery.dropLatitude,
+      delivery.dropLongitude,
+    );
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': drop,
+      'waypoints': pickup,
+      'travelmode': 'driving',
+    });
+    await _openContact(context, uri);
+  }
+
+  String _mapsDestination(String address, double? latitude, double? longitude) {
+    if (latitude != null && longitude != null) return '$latitude,$longitude';
+    return _displayAddress(address);
+  }
+
   Future<void> _openContact(BuildContext context, Uri uri) async {
     try {
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -448,48 +524,166 @@ class DeliveryPage extends StatelessWidget {
       child: Text(label),
     );
   }
+
+  String _displayAddress(String address) =>
+      delivery.isLocationDemo ? address : '$address, Mandapeta';
 }
 
-class _PickupVerificationForm extends StatefulWidget {
-  const _PickupVerificationForm({
+class _OrderFlowProgress extends StatelessWidget {
+  const _OrderFlowProgress({
     required this.delivery,
-    required this.offerStore,
+    required this.pickupStatus,
+    required this.deliveryStatus,
   });
+
+  final DemoDelivery delivery;
+  final PickupStatus pickupStatus;
+  final DeliveryStatus deliveryStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeStep = switch (pickupStatus) {
+      PickupStatus.goingToPickup ||
+      PickupStatus.reachedPickup ||
+      PickupStatus.orderDetails => 0,
+      PickupStatus.pickedUp => 1,
+      PickupStatus.onTheWay => 2,
+    };
+    final delivered = deliveryStatus == DeliveryStatus.delivered;
+    const labels = ['Accepted', 'Picked up', 'Delivered'];
+    const icons = [
+      Icons.check_circle_outline_rounded,
+      Icons.inventory_2_outlined,
+      Icons.flag_outlined,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 13),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFF0F7F1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x1F176B45)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x10176B45),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'ORDER JOURNEY',
+                  style: TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 11,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (delivery.isLocationDemo)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2F1E7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'DEMO',
+                    style: TextStyle(
+                      color: AppTheme.darkGreen,
+                      fontSize: 9,
+                      letterSpacing: 0.6,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (var index = 0; index < labels.length; index++) ...[
+                if (index > 0)
+                  Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: 2,
+                      color: delivered || index <= activeStep
+                          ? AppTheme.brand
+                          : const Color(0xFFD8E2DA),
+                    ),
+                  ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Column(
+                      key: ValueKey('$index:$activeStep:$delivered'),
+                      children: [
+                        Icon(
+                          delivered || index < activeStep
+                              ? Icons.check_circle_rounded
+                              : icons[index],
+                          color: delivered || index <= activeStep
+                              ? AppTheme.brand
+                              : const Color(0xFF9AA79D),
+                          size: 23,
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          labels[index],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: delivered || index <= activeStep
+                                ? AppTheme.darkGreen
+                                : AppTheme.secondaryText,
+                            fontSize: 10,
+                            fontWeight: delivered || index == activeStep
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PickupOrderDetails extends StatelessWidget {
+  const _PickupOrderDetails({required this.delivery, required this.offerStore});
 
   final DemoDelivery delivery;
   final OrderOfferStore offerStore;
 
-  @override
-  State<_PickupVerificationForm> createState() =>
-      _PickupVerificationFormState();
-}
-
-class _PickupVerificationFormState extends State<_PickupVerificationForm> {
-  final _formKey = GlobalKey<FormState>();
-  final _digitsController = TextEditingController();
-  String? _verificationError;
-
-  @override
-  void dispose() {
-    _digitsController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _verify() async {
-    if (!_formKey.currentState!.validate()) return;
-    final store = widget.offerStore;
-    final confirmed = store.apiClient == null
-        ? store.verifyPickup(widget.delivery, _digitsController.text)
-        : await store.confirmPickup(widget.delivery, _digitsController.text);
-    if (!mounted) return;
-    if (confirmed) {
-      return;
-    }
-
-    setState(
-      () => _verificationError =
-          store.errorMessage ?? 'Those digits do not match the order.',
-    );
+  Future<void> _confirmPickup(BuildContext context) async {
+    final completed = await offerStore.confirmPickupAndStartDelivery(delivery);
+    if (!context.mounted || completed) return;
+    final message =
+        offerStore.errorMessage ??
+        'Unable to confirm pickup and start the delivery.';
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -497,70 +691,113 @@ class _PickupVerificationFormState extends State<_PickupVerificationForm> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Order Details', style: AppTheme.cardTitle),
-              const SizedBox(height: 6),
-              Text('Store: ${widget.delivery.store}'),
-              const SizedBox(height: 6),
-              Text('Order: ${widget.delivery.orderId}'),
-              const SizedBox(height: 6),
-              const Text('Enter the last 4 digits to confirm pickup.'),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _digitsController,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                maxLength: 4,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Last 4 digits',
-                  hintText: '2051',
-                  counterText: '',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Order Details', style: AppTheme.cardTitle),
+            const SizedBox(height: 14),
+            _OrderDetailLine(label: 'Order ID', value: delivery.orderId),
+            _OrderDetailLine(label: 'Store', value: delivery.store),
+            _OrderDetailLine(label: 'Pickup address', value: delivery.pickup),
+            _OrderDetailLine(label: 'Customer', value: delivery.customer),
+            _OrderDetailLine(label: 'Delivery address', value: delivery.drop),
+            _OrderDetailLine(
+              label: 'Estimated payout',
+              value: '₹${delivery.calculatedPayout}',
+            ),
+            const Divider(height: 24),
+            const Text('Items to collect', style: AppTheme.cardTitle),
+            if (delivery.items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Item details were not provided by the order service.',
+                  style: AppTheme.secondaryTextStyle,
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Enter the last 4 digits.';
-                  }
-                  if (!RegExp(r'^\d{4}$').hasMatch(value)) {
-                    return 'Enter exactly 4 digits.';
-                  }
-                  return null;
-                },
-                onChanged: (_) {
-                  if (_verificationError != null) {
-                    setState(() => _verificationError = null);
-                  }
-                },
-              ),
-              if (_verificationError case final error?) ...[
-                const SizedBox(height: 4),
-                Text(
-                  error,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+              )
+            else
+              for (final item in delivery.items)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(item.name, style: AppTheme.bodyText),
+                  trailing: Text(
+                    '× ${item.quantity}',
+                    style: AppTheme.bodyText.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ],
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: widget.offerStore.isUpdatingOrderStatus
-                    ? null
-                    : _verify,
-                child: widget.offerStore.isUpdatingOrderStatus
-                    ? const Text('Updating...')
-                    : const Text('Verify Pickup'),
+            if (delivery.customerPhone != null)
+              _OrderDetailLine(
+                label: 'Customer phone',
+                value: delivery.customerPhone!,
               ),
-            ],
-          ),
+            if (delivery.storePhone != null)
+              _OrderDetailLine(
+                label: 'Store phone',
+                value: delivery.storePhone!,
+              ),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: offerStore.isUpdatingOrderStatus
+                  ? null
+                  : () => _confirmPickup(context),
+              child: offerStore.isUpdatingOrderStatus
+                  ? const Text('Updating...')
+                  : const Text('I picked up the order'),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _OrderDetailLine extends StatelessWidget {
+  const _OrderDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(label, style: AppTheme.secondaryTextStyle),
+        ),
+        Expanded(child: Text(value, style: AppTheme.bodyText)),
+      ],
+    ),
+  );
+}
+
+class _ArrivalNotice extends StatelessWidget {
+  const _ArrivalNotice();
+
+  @override
+  Widget build(BuildContext context) => const Card(
+    color: AppTheme.brandSoft,
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(Icons.location_searching_rounded, color: AppTheme.brand),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'We’ll detect your arrival automatically within '
+              '${OrderOfferStore.pickupArrivalRadiusMeters} m of the store.',
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _StopCard extends StatelessWidget {
@@ -627,21 +864,31 @@ class _RouteMapCard extends StatelessWidget {
   const _RouteMapCard({
     required this.delivery,
     required this.riderPosition,
+    required this.pickupStatus,
+    required this.offerStore,
     required this.showMapTiles,
+    required this.onOpenMaps,
   });
 
   final DemoDelivery delivery;
   final Position? riderPosition;
+  final PickupStatus pickupStatus;
+  final OrderOfferStore offerStore;
   final bool showMapTiles;
+  final VoidCallback onOpenMaps;
 
   @override
   Widget build(BuildContext context) {
-    final routePoints = <LatLng>[
-      if (delivery.pickupLatitude != null && delivery.pickupLongitude != null)
-        LatLng(delivery.pickupLatitude!, delivery.pickupLongitude!),
-      if (delivery.dropLatitude != null && delivery.dropLongitude != null)
-        LatLng(delivery.dropLatitude!, delivery.dropLongitude!),
-    ];
+    final isPickupLeg =
+        pickupStatus != PickupStatus.pickedUp &&
+        pickupStatus != PickupStatus.onTheWay;
+    final destination = isPickupLeg
+        ? delivery.pickupLatitude == null || delivery.pickupLongitude == null
+              ? null
+              : LatLng(delivery.pickupLatitude!, delivery.pickupLongitude!)
+        : delivery.dropLatitude == null || delivery.dropLongitude == null
+        ? null
+        : LatLng(delivery.dropLatitude!, delivery.dropLongitude!);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -654,8 +901,11 @@ class _RouteMapCard extends StatelessWidget {
               children: [
                 const Icon(Icons.route_rounded, color: AppTheme.brand),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Live route', style: AppTheme.cardTitle),
+                Expanded(
+                  child: Text(
+                    isPickupLeg ? 'Route to Store' : 'Route to Customer',
+                    style: AppTheme.cardTitle,
+                  ),
                 ),
                 Text(
                   riderPosition == null ? 'Locating rider...' : 'Live tracking',
@@ -664,15 +914,20 @@ class _RouteMapCard extends StatelessWidget {
               ],
             ),
           ),
-          if (routePoints.length >= 2)
+          if (destination != null)
             RiderMapView(
               key: const ValueKey('delivery-route-map'),
               riderLocation: riderPosition == null
                   ? null
                   : LatLng(riderPosition!.latitude, riderPosition!.longitude),
               showCurrentLocation: riderPosition == null,
-              pickupLocation: routePoints.first,
-              dropoffLocation: routePoints.last,
+              pickupLocation: isPickupLeg ? destination : null,
+              dropoffLocation: isPickupLeg ? null : destination,
+              navigationTarget: destination,
+              onRiderPositionChanged: isPickupLeg
+                  ? (position) =>
+                        offerStore.checkPickupArrival(delivery, position)
+                  : null,
               showTiles: showMapTiles,
               height: 240,
             )
@@ -686,21 +941,43 @@ class _RouteMapCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 9, 14, 12),
-            child: Wrap(
-              spacing: 14,
-              runSpacing: 8,
+            child: Row(
               children: [
-                if (riderPosition != null)
-                  const _RouteLegendItem(label: 'Rider', color: AppTheme.brand),
-                if (delivery.pickupLatitude != null &&
-                    delivery.pickupLongitude != null)
-                  const _RouteLegendItem(label: 'Store', color: AppTheme.brand),
-                if (delivery.dropLatitude != null &&
-                    delivery.dropLongitude != null)
-                  const _RouteLegendItem(
-                    label: 'Drop-off',
-                    color: AppTheme.brandYellow,
+                Expanded(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      if (riderPosition != null)
+                        const _RouteLegendItem(
+                          label: 'Rider',
+                          color: AppTheme.brand,
+                        ),
+                      if (isPickupLeg)
+                        const _RouteLegendItem(
+                          label: 'Store',
+                          color: AppTheme.brand,
+                        )
+                      else
+                        const _RouteLegendItem(
+                          label: 'Customer',
+                          color: AppTheme.brandYellow,
+                        ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  key: const ValueKey('route-map-open-google-maps'),
+                  onPressed: onOpenMaps,
+                  icon: const Icon(Icons.navigation_rounded, size: 18),
+                  label: const Text('Google Maps'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 11),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ],
             ),
           ),

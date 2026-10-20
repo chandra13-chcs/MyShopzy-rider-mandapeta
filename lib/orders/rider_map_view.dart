@@ -13,6 +13,8 @@ class RiderMapView extends StatefulWidget {
   const RiderMapView({
     this.pickupLocation,
     this.dropoffLocation,
+    this.navigationTarget,
+    this.onRiderPositionChanged,
     this.routePoints = const [],
     this.encodedRoute,
     this.riderLocation,
@@ -26,6 +28,8 @@ class RiderMapView extends StatefulWidget {
 
   final LatLng? pickupLocation;
   final LatLng? dropoffLocation;
+  final LatLng? navigationTarget;
+  final ValueChanged<Position>? onRiderPositionChanged;
   final List<LatLng> routePoints;
   final String? encodedRoute;
   final LatLng? riderLocation;
@@ -84,6 +88,7 @@ class _RiderMapViewState extends State<RiderMapView>
     }
     if (oldWidget.pickupLocation != widget.pickupLocation ||
         oldWidget.dropoffLocation != widget.dropoffLocation ||
+        oldWidget.navigationTarget != widget.navigationTarget ||
         oldWidget.routePoints != widget.routePoints ||
         oldWidget.encodedRoute != widget.encodedRoute ||
         oldWidget.riderLocation != widget.riderLocation ||
@@ -167,6 +172,7 @@ class _RiderMapViewState extends State<RiderMapView>
       _riderHeading = heading;
       _locationMessage = null;
     });
+    widget.onRiderPositionChanged?.call(position);
     if (widget.followRider) {
       _animateCameraTo(nextLocation, zoom: 16);
     }
@@ -249,6 +255,10 @@ class _RiderMapViewState extends State<RiderMapView>
   }
 
   List<LatLng> get _routePoints {
+    final navigationTarget = widget.navigationTarget;
+    if (navigationTarget != null) {
+      return [?_riderLocation, navigationTarget];
+    }
     if (widget.routePoints.isNotEmpty) return widget.routePoints;
     final encodedRoute = widget.encodedRoute;
     if (encodedRoute != null && encodedRoute.isNotEmpty) {

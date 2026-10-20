@@ -58,9 +58,7 @@ void main() {
     },
   );
 
-  testWidgets('renders the rider-to-store-to-customer route polyline', (
-    tester,
-  ) async {
+  testWidgets('renders the rider-to-customer route polyline', (tester) async {
     const delivery = DemoDelivery(
       orderId: 'route-test-order',
       store: 'Green Basket',
@@ -129,7 +127,7 @@ void main() {
     final routeLayer = tester.widget<PolylineLayer>(find.byType(PolylineLayer));
     expect(routeLayer.polylines, hasLength(1));
     expect(routeLayer.polylines.single.points, [
-      const LatLng(16.87, 81.93),
+      const LatLng(16.86, 81.92),
       const LatLng(16.88, 81.94),
     ]);
     await tester.pumpWidget(const SizedBox.shrink());

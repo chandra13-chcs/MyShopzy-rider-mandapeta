@@ -39,7 +39,6 @@ class _GigsPageState extends State<GigsPage> {
   late final GigRepository _repository =
       widget.repository ?? DemoGigRepository();
   final List<GigBooking> _bookings = [];
-  Map<String, GigAvailability> _availability = const {};
   final Set<String> _busySessionIds = {};
   int _selectedTab = 0;
   bool _isLoading = true;
@@ -85,7 +84,6 @@ class _GigsPageState extends State<GigsPage> {
           ..addAll(
             data.bookings.where((booking) => _sameDate(booking.date, _today)),
           );
-        _availability = data.availability;
         _isLoading = false;
       });
     } on Object catch (error) {
@@ -109,18 +107,9 @@ class _GigsPageState extends State<GigsPage> {
   );
 
   bool _canBook(GigSession session) {
-    final endsAt = DateTime(
-      _today.year,
-      _today.month,
-      _today.day,
-      session.endHour,
-    );
-    return widget.availabilityStore.isOnline &&
-        _loadError == null &&
+    return _loadError == null &&
         !_isBooked(session) &&
-        !_busySessionIds.contains(session.id) &&
-        (_availability[session.id]?.availableSlots ?? 1) > 0 &&
-        _now.isBefore(endsAt);
+        !_busySessionIds.contains(session.id);
   }
 
   Future<bool> _bookSession(GigSession session) async {
@@ -152,70 +141,15 @@ class _GigsPageState extends State<GigsPage> {
         builder: (_) => GigSessionDetailsPage(
           session: session,
           date: _today,
-          availabilityStore: widget.availabilityStore,
           isBooked: () => _isBooked(session),
           canBook: () => _canBook(session),
-          isFull: () => (_availability[session.id]?.availableSlots ?? 1) <= 0,
           isDemo: _isDemo,
           onBook: () => _bookSession(session),
-          onGoOnline: () async {
-            widget.availabilityStore.setAvailable(true);
-            await _refreshBookings();
-          },
           loadError: () => _loadError,
-          clock: () => _now,
         ),
       ),
     );
     if (booked == true && mounted) setState(() => _selectedTab = 1);
-  }
-
-  Future<void> _cancelBooking(GigBooking booking) async {
-    final session = _sessionFor(booking.sessionId);
-    if (session == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => _CancelSessionDialog(
-        session: session,
-        date: booking.date,
-        cancel: () => _repository.cancelBooking(booking),
-        errorMessage: _errorMessage,
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      final index = _bookings.indexWhere((item) => item.id == booking.id);
-      if (index != -1) {
-        _bookings[index] = booking.copyWith(status: GigBookingStatus.cancelled);
-      }
-    });
-    unawaited(_refreshBookings());
-    await _showOutcomeDialog(
-      context,
-      title: 'Session cancelled',
-      message: '${session.name} has been cancelled successfully.',
-      icon: Icons.check_circle_rounded,
-    );
-  }
-
-  Future<void> _showOutcomeDialog(
-    BuildContext context, {
-    required String title,
-    required String message,
-    required IconData icon,
-  }) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: _OutcomeContent(title: title, message: message, icon: icon),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -262,7 +196,6 @@ class _GigsPageState extends State<GigsPage> {
   }
 
   Widget _buildSessions(BuildContext context) {
-    final isOnline = widget.availabilityStore.isOnline;
     final dateLabel = _formatDate(context, _today);
     return ListView(
       key: const ValueKey('available-sessions'),
@@ -273,17 +206,13 @@ class _GigsPageState extends State<GigsPage> {
           subtitle: dateLabel,
           icon: Icons.calendar_today_rounded,
         ),
+        const SizedBox(height: 16),
+        const _GigBookingHero(),
         if (_isDemo) ...[
           const SizedBox(height: 12),
           const _InfoBanner(
             icon: Icons.science_outlined,
             text: 'Demo mode: bookings are simulated in memory and are not saved to MyShopzy. Slot counts are not connected.',
-          ),
-        ],
-        if (!isOnline) ...[
-          const SizedBox(height: 12),
-          _GoOnlineBanner(
-            onGoOnline: () => widget.availabilityStore.setAvailable(true),
           ),
         ],
         if (_loadError != null) ...[
@@ -312,29 +241,17 @@ class _GigsPageState extends State<GigsPage> {
     int index,
   ) {
     final isBooked = _isBooked(session);
-    final isPast = !_now.isBefore(
-      DateTime(_today.year, _today.month, _today.day, session.endHour),
-    );
-    final isOnline = widget.availabilityStore.isOnline;
-    final availability = _availability[session.id];
-    final isFull = availability != null && availability.availableSlots <= 0;
-    final canBook = _canBook(session) && !isFull;
+    final canBook = _canBook(session);
     final status = isBooked
         ? 'Booked'
-        : isFull
-        ? 'Full'
-        : isPast
-        ? 'Session ended'
-        : !isOnline
-        ? 'Go online to book'
         : _loadError != null
         ? 'Booking unavailable'
-        : 'Open for booking';
+        : 'Open anytime';
     final color = isBooked
         ? AppTheme.brand
-        : isFull || isPast
+        : _loadError != null
         ? AppTheme.secondaryText
-        : const Color(0xFFE23744);
+        : AppTheme.brand;
 
     return TweenAnimationBuilder<double>(
       key: ValueKey('session-card-${session.id}'),
@@ -358,9 +275,6 @@ class _GigsPageState extends State<GigsPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 290;
-                final slots = availability != null
-                    ? '${availability.availableSlots} / ${availability.totalSlots} slots'
-                    : 'Slot counts unavailable';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -406,7 +320,10 @@ class _GigsPageState extends State<GigsPage> {
                             style: AppTheme.secondaryTextStyle,
                           ),
                           const SizedBox(height: 5),
-                          Text(slots, style: AppTheme.smallStatus),
+                          const Text(
+                            'Book any time',
+                            style: AppTheme.smallStatus,
+                          ),
                         ],
                       )
                     else
@@ -424,7 +341,10 @@ class _GigsPageState extends State<GigsPage> {
                               style: AppTheme.secondaryTextStyle,
                             ),
                           ),
-                          Text(slots, style: AppTheme.smallStatus),
+                          const Text(
+                            'Book any time',
+                            style: AppTheme.smallStatus,
+                          ),
                         ],
                       ),
                     const SizedBox(height: 14),
@@ -436,12 +356,8 @@ class _GigsPageState extends State<GigsPage> {
                         child: Text(
                           isBooked
                               ? 'Booked'
-                              : isFull || isPast
-                              ? (isFull ? 'Session full' : 'Session ended')
                               : _loadError != null
                               ? 'Unavailable'
-                              : !isOnline
-                              ? 'Go online to book'
                               : 'Book Session',
                         ),
                       ),
@@ -458,28 +374,12 @@ class _GigsPageState extends State<GigsPage> {
 
   Widget _buildMyGigs(BuildContext context) {
     final active = _bookings.where(
-      (booking) =>
-          booking.status == GigBookingStatus.booked &&
-          !_isSessionEnded(booking),
-    );
-    final completed = _bookings.where(
-      (booking) =>
-          booking.status == GigBookingStatus.booked && _isSessionEnded(booking),
+      (booking) => booking.status == GigBookingStatus.booked,
     );
     final cancelled = _bookings.where(
       (booking) => booking.status == GigBookingStatus.cancelled,
     );
-    final upcoming = _sessions.where((session) {
-      final startsAt = DateTime(
-        _today.year,
-        _today.month,
-        _today.day,
-        session.startHour,
-      );
-      return startsAt.isAfter(_now) &&
-          !_isBooked(session) &&
-          (_availability[session.id]?.availableSlots != 0);
-    });
+    final upcoming = _sessions.where((session) => !_isBooked(session));
     final dateLabel = _formatDate(context, _today);
 
     return ListView(
@@ -507,20 +407,19 @@ class _GigsPageState extends State<GigsPage> {
             title: "Today's bookings",
             bookings: active,
             emptyMessage: 'You have no booked sessions today.',
-            showCancel: true,
           ),
           const SizedBox(height: 18),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Upcoming sessions today', style: AppTheme.sectionTitle),
+              Text('Sessions open to book today', style: AppTheme.sectionTitle),
               const SizedBox(height: 10),
               if (upcoming.isEmpty)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'No unbooked sessions are upcoming today.',
+                      'All sessions for today are already booked.',
                       style: AppTheme.secondaryTextStyle,
                     ),
                   ),
@@ -531,13 +430,6 @@ class _GigsPageState extends State<GigsPage> {
                   const SizedBox(height: 10),
                 ],
             ],
-          ),
-          const SizedBox(height: 18),
-          _bookingSection(
-            context,
-            title: 'Completed sessions',
-            bookings: completed,
-            emptyMessage: 'Completed sessions will appear here.',
           ),
           const SizedBox(height: 18),
           _bookingSection(
@@ -577,7 +469,6 @@ class _GigsPageState extends State<GigsPage> {
     required String title,
     required Iterable<GigBooking> bookings,
     required String emptyMessage,
-    bool showCancel = false,
   }) {
     final items = bookings.toList(growable: false);
     return Column(
@@ -608,32 +499,20 @@ class _GigsPageState extends State<GigsPage> {
           )
         else
           for (final booking in items) ...[
-            _bookingCard(context, booking, showCancel: showCancel),
+            _bookingCard(context, booking),
             const SizedBox(height: 10),
           ],
       ],
     );
   }
 
-  Widget _bookingCard(
-    BuildContext context,
-    GigBooking booking, {
-    required bool showCancel,
-  }) {
+  Widget _bookingCard(BuildContext context, GigBooking booking) {
     final session = _sessionFor(booking.sessionId);
     if (session == null) return const SizedBox.shrink();
     final status = booking.status == GigBookingStatus.cancelled
         ? 'Cancelled'
-        : _isSessionEnded(booking)
-        ? 'Completed'
-        : _isSessionInProgress(booking)
-        ? 'In Progress'
         : 'Booked';
-    final statusColor = status == 'Cancelled'
-        ? AppTheme.error
-        : status == 'Completed' || status == 'In Progress'
-        ? AppTheme.brand
-        : const Color(0xFFE23744);
+    final statusColor = status == 'Cancelled' ? AppTheme.error : AppTheme.brand;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -651,47 +530,10 @@ class _GigsPageState extends State<GigsPage> {
               '${_timeRange(context, session)} · ${_formatDate(context, booking.date)}',
               style: AppTheme.secondaryTextStyle,
             ),
-            if (showCancel &&
-                booking.status == GigBookingStatus.booked &&
-                !_isSessionEnded(booking)) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  onPressed: () => _cancelBooking(booking),
-                  child: const Text('Cancel Session'),
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
-  }
-
-  bool _isSessionEnded(GigBooking booking) {
-    final session = _sessionFor(booking.sessionId);
-    if (session == null) return false;
-    return !_now.isBefore(
-      DateTime(
-        booking.date.year,
-        booking.date.month,
-        booking.date.day,
-        session.endHour,
-      ),
-    );
-  }
-
-  bool _isSessionInProgress(GigBooking booking) {
-    final session = _sessionFor(booking.sessionId);
-    if (session == null) return false;
-    final startsAt = DateTime(
-      booking.date.year,
-      booking.date.month,
-      booking.date.day,
-      session.startHour,
-    );
-    return !_now.isBefore(startsAt) && !_isSessionEnded(booking);
   }
 
   GigSession? _sessionFor(String id) {
@@ -706,30 +548,21 @@ class GigSessionDetailsPage extends StatefulWidget {
   const GigSessionDetailsPage({
     required this.session,
     required this.date,
-    required this.availabilityStore,
     required this.isBooked,
     required this.canBook,
-    required this.isFull,
     required this.isDemo,
     required this.onBook,
-    required this.onGoOnline,
     required this.loadError,
-    required this.clock,
     super.key,
   });
 
   final GigSession session;
   final DateTime date;
-  final AvailabilityStore availabilityStore;
   final bool Function() isBooked;
   final bool Function() canBook;
-  final bool Function() isFull;
   final bool isDemo;
   final Future<bool> Function() onBook;
-  final Future<void> Function() onGoOnline;
   final String? Function() loadError;
-  final DateTime Function() clock;
-
   @override
   State<GigSessionDetailsPage> createState() => _GigSessionDetailsPageState();
 }
@@ -737,12 +570,6 @@ class GigSessionDetailsPage extends StatefulWidget {
 class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
   bool _isSubmitting = false;
   String? _error;
-
-  Future<void> _goOnline() async {
-    await widget.onGoOnline();
-    if (!mounted) return;
-    setState(() => _error = widget.loadError());
-  }
 
   Future<void> _book() async {
     if (_isSubmitting || !widget.canBook()) return;
@@ -756,7 +583,7 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
       if (!succeeded) {
         setState(() {
           _isSubmitting = false;
-          _error = "You're offline or this session is no longer available.";
+          _error = 'This session could not be booked. Please try again.';
         });
         return;
       }
@@ -793,19 +620,7 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.availabilityStore,
-    builder: (context, _) => _buildDetails(context),
-  );
-
-  Widget _buildDetails(BuildContext context) {
-    final endsAt = DateTime(
-      widget.date.year,
-      widget.date.month,
-      widget.date.day,
-      widget.session.endHour,
-    );
-    final isPast = !widget.clock().isBefore(endsAt);
+  Widget build(BuildContext context) {
     final error = _error ?? widget.loadError();
     return Scaffold(
       appBar: AppBar(title: const Text('Session details')),
@@ -840,17 +655,12 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
                   const SizedBox(height: 12),
                   const _DetailRow(
                     icon: Icons.rule_rounded,
-                    label: 'Booking is subject to available session capacity.',
+                    label: 'This session is open to book at any time today.',
                   ),
                   const SizedBox(height: 12),
                   const _DetailRow(
                     icon: Icons.power_settings_new_rounded,
-                    label: 'You must be online when booking.',
-                  ),
-                  const SizedBox(height: 12),
-                  const _DetailRow(
-                    icon: Icons.schedule_rounded,
-                    label: 'You can book this session while it is in progress; ended sessions cannot be booked.',
+                    label: 'You can book while offline; going online is not required.',
                   ),
                   if (widget.isDemo) ...[
                     const SizedBox(height: 14),
@@ -868,18 +678,8 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
             _InfoBanner(icon: Icons.error_outline_rounded, text: error),
           ],
           const SizedBox(height: 16),
-          if (!widget.availabilityStore.isOnline)
-            FilledButton.icon(
-              onPressed: _goOnline,
-              icon: const Icon(Icons.power_settings_new_rounded),
-              label: const Text('Go Online'),
-            )
-          else if (widget.isBooked())
+          if (widget.isBooked())
             const FilledButton(onPressed: null, child: Text('Already Booked'))
-          else if (isPast)
-            const FilledButton(onPressed: null, child: Text('Session Ended'))
-          else if (widget.isFull())
-            const FilledButton(onPressed: null, child: Text('Session Full'))
           else
             FilledButton(
               onPressed: widget.canBook() && !_isSubmitting ? _book : null,
@@ -898,89 +698,6 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
       ),
     );
   }
-}
-
-class _CancelSessionDialog extends StatefulWidget {
-  const _CancelSessionDialog({
-    required this.session,
-    required this.date,
-    required this.cancel,
-    required this.errorMessage,
-  });
-
-  final GigSession session;
-  final DateTime date;
-  final Future<void> Function() cancel;
-  final String Function(Object error) errorMessage;
-
-  @override
-  State<_CancelSessionDialog> createState() => _CancelSessionDialogState();
-}
-
-class _CancelSessionDialogState extends State<_CancelSessionDialog> {
-  bool _isCancelling = false;
-  String? _error;
-
-  Future<void> _confirm() async {
-    if (_isCancelling) return;
-    setState(() {
-      _isCancelling = true;
-      _error = null;
-    });
-    try {
-      await widget.cancel();
-      if (mounted) Navigator.of(context).pop(true);
-    } on Object catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isCancelling = false;
-        _error = widget.errorMessage(error);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    icon: const Icon(Icons.event_busy_rounded, color: AppTheme.error),
-    title: const Text('Cancel this session?'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${widget.session.name} · ${_timeRange(context, widget.session)} · ${_formatDate(context, widget.date)}',
-        ),
-        const SizedBox(height: 8),
-        const Text('This will release your booking for this session.'),
-        if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: AppTheme.error)),
-        ],
-        if (_isCancelling) ...[
-          const SizedBox(height: 18),
-          const Center(
-            child: SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            ),
-          ),
-        ],
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: _isCancelling
-            ? null
-            : () => Navigator.of(context).pop(false),
-        child: const Text('Keep Session'),
-      ),
-      FilledButton(
-        onPressed: _isCancelling ? null : _confirm,
-        child: Text(_isCancelling ? 'Cancelling…' : 'Confirm Cancellation'),
-      ),
-    ],
-  );
 }
 
 class _PageIntro extends StatelessWidget {
@@ -1021,6 +738,69 @@ class _PageIntro extends StatelessWidget {
   );
 }
 
+class _GigBookingHero extends StatelessWidget {
+  const _GigBookingHero();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppTheme.darkGreen, AppTheme.brand],
+      ),
+      borderRadius: BorderRadius.circular(22),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x332E7D32),
+          blurRadius: 18,
+          offset: Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          ),
+          child: const Icon(
+            Icons.bolt_rounded,
+            color: AppTheme.brandYellow,
+            size: 31,
+          ),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pick a shift that fits you',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'All five sessions are open to book today.',
+                style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _InfoBanner extends StatelessWidget {
   const _InfoBanner({required this.icon, required this.text, this.action});
 
@@ -1044,65 +824,6 @@ class _InfoBanner extends StatelessWidget {
         Expanded(child: Text(text, style: AppTheme.secondaryTextStyle)),
         ?action,
       ],
-    ),
-  );
-}
-
-class _GoOnlineBanner extends StatelessWidget {
-  const _GoOnlineBanner({required this.onGoOnline});
-
-  final VoidCallback onGoOnline;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFF1F1),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFF4D0D0)),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final message = Row(
-          children: [
-            const Icon(
-              Icons.power_settings_new_rounded,
-              color: Color(0xFFE23744),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("You're offline", style: AppTheme.cardTitle),
-                  SizedBox(height: 3),
-                  Text(
-                    'Go online to book a session.',
-                    style: AppTheme.secondaryTextStyle,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-        final button = FilledButton(
-          onPressed: onGoOnline,
-          child: const Text('Go Online'),
-        );
-        if (constraints.maxWidth < 310) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [message, const SizedBox(height: 12), button],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: message),
-            const SizedBox(width: 8),
-            button,
-          ],
-        );
-      },
     ),
   );
 }

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:myshopzy_rider/app/rider_app.dart';
 import 'package:myshopzy_rider/core/state/availability_store.dart';
 import 'package:myshopzy_rider/core/state/new_order_alert.dart';
@@ -17,6 +20,7 @@ import 'package:myshopzy_rider/home/home_page.dart';
 import 'package:myshopzy_rider/orders/incoming_order_offer_dialog.dart';
 import 'package:myshopzy_rider/orders/order_offer_page.dart';
 import 'package:myshopzy_rider/orders/orders_page.dart';
+import 'package:myshopzy_rider/orders/rider_map_view.dart';
 import 'package:myshopzy_rider/profile/profile_page.dart';
 import 'package:myshopzy_rider/settings/settings_page.dart';
 
@@ -193,9 +197,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Check for demo offer'));
     await tester.pumpAndSettle();
-    expect(find.text('NEW ORDER'), findsOneWidget);
+    expect(find.text('New order!'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('NEW ORDER'), findsOneWidget);
+    expect(find.text('New order!'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('incoming-order-accept')));
     await tester.pumpAndSettle();
@@ -253,81 +257,86 @@ void main() {
     expect(find.text("You're currently delivering"), findsOneWidget);
   });
 
-  testWidgets('gig sessions allow current and future sessions only', (
-    tester,
-  ) async {
-    final availabilityStore = AvailabilityStore();
-    final repository = DemoGigRepository();
-    final now = DateTime(2026, 10, 18, 8);
+  testWidgets(
+    'gig sessions are available any time and prevent duplicate booking',
+    (tester) async {
+      final availabilityStore = AvailabilityStore();
+      final repository = DemoGigRepository();
+      final now = DateTime(2026, 10, 18, 8);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: GigsPage(
-          availabilityStore: availabilityStore,
-          repository: repository,
-          clock: () => now,
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: GigsPage(
+            availabilityStore: availabilityStore,
+            repository: repository,
+            clock: () => now,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Morning'), findsOneWidget);
-    expect(find.text('Late Morning'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
-          .onPressed,
-      isNotNull,
-    );
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Morning'), findsOneWidget);
+      expect(find.text('Late Morning'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+            .onPressed,
+        isNotNull,
+      );
 
-    final detailsButton = find.byKey(const ValueKey('gig-book-0'));
-    await tester.ensureVisible(detailsButton);
-    await tester.tap(detailsButton);
-    await tester.pumpAndSettle();
-    expect(find.text('Session details'), findsOneWidget);
-    await tester.tap(find.text('Book Session'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450));
-    await tester.pumpAndSettle();
-    expect(find.text('Gig Session Booked!'), findsOneWidget);
-    await tester.tap(find.text('View My Gigs'));
-    await tester.pumpAndSettle();
-    expect(find.text('My Gigs'), findsWidgets);
-    expect(find.text('Morning'), findsOneWidget);
+      final detailsButton = find.byKey(const ValueKey('gig-book-0'));
+      await tester.ensureVisible(detailsButton);
+      await tester.tap(detailsButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Session details'), findsOneWidget);
+      await tester.tap(find.text('Book Session'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.text('Gig Session Booked!'), findsOneWidget);
+      await tester.tap(find.text('View My Gigs'));
+      await tester.pumpAndSettle();
+      expect(find.text('My Gigs'), findsWidgets);
+      expect(find.text('Morning'), findsOneWidget);
 
-    await tester.tap(find.text('Book a session'));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
-          .onPressed,
-      isNull,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
-          .onPressed,
-      isNotNull,
-    );
-    await tester.ensureVisible(find.byKey(const ValueKey('gig-book-1')));
-    await tester.tap(find.byKey(const ValueKey('gig-book-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Book Session'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450));
-    await tester.pumpAndSettle();
-    expect(find.text('Gig Session Booked!'), findsOneWidget);
-    await tester.tap(find.text('View My Gigs'));
-    await tester.pumpAndSettle();
-    expect(find.text('Cancel Session'), findsNWidgets(2));
+      await tester.tap(find.text('Book a session'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
+            .onPressed,
+        isNotNull,
+      );
+      final secondSessionButton = find.byKey(const ValueKey('gig-book-1'));
+      await tester.scrollUntilVisible(
+        secondSessionButton,
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(secondSessionButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Book Session'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      expect(find.text('Gig Session Booked!'), findsOneWidget);
+      await tester.tap(find.text('View My Gigs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel Session'), findsNothing);
 
-    await tester.pumpWidget(const SizedBox());
-    availabilityStore.dispose();
-  });
+      await tester.pumpWidget(const SizedBox());
+      availabilityStore.dispose();
+    },
+  );
 
-  testWidgets('ended gig session cannot be booked after its end time', (
-    tester,
-  ) async {
+  testWidgets('ended gig session remains bookable', (tester) async {
     final availabilityStore = AvailabilityStore();
     await tester.pumpWidget(
       MaterialApp(
@@ -343,7 +352,7 @@ void main() {
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
-      isNull,
+      isNotNull,
     );
     expect(
       tester
@@ -355,7 +364,7 @@ void main() {
     availabilityStore.dispose();
   });
 
-  testWidgets('session cannot be booked at its exact end time', (tester) async {
+  testWidgets('session remains bookable at its exact end time', (tester) async {
     final availabilityStore = AvailabilityStore();
     await tester.pumpWidget(
       MaterialApp(
@@ -371,13 +380,13 @@ void main() {
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
-      isNull,
+      isNotNull,
     );
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
 
-  testWidgets('sessions with no remaining backend slots cannot be booked', (
+  testWidgets('sessions remain bookable when slot counts are zero', (
     tester,
   ) async {
     final availabilityStore = AvailabilityStore();
@@ -397,19 +406,21 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Full'), findsOneWidget);
-    expect(find.text('0 / 4 slots'), findsOneWidget);
+    expect(find.text('Open anytime'), findsWidgets);
+    expect(find.text('0 / 4 slots'), findsNothing);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
-      isNull,
+      isNotNull,
     );
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
 
-  testWidgets('offline gig booking offers Go Online', (tester) async {
+  testWidgets('offline riders can book gigs without going online', (
+    tester,
+  ) async {
     final availabilityStore = AvailabilityStore(
       initialStatus: AvailabilityStatus.offline,
     );
@@ -423,15 +434,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text("You're offline"), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.text('Go Online').first);
-    await tester.pumpAndSettle();
+    expect(find.text('Go Online'), findsNothing);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
@@ -465,10 +468,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Go Online').first);
-    await tester.pumpAndSettle();
+    expect(find.text('Go Online'), findsNothing);
     expect(tester.takeException(), isNull);
 
+    await tester.scrollUntilVisible(
+      find.text('Morning'),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Morning').first);
     await tester.pumpAndSettle();
     expect(find.text('Session details'), findsOneWidget);
@@ -476,7 +484,10 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('My Gigs').first);
+    tester
+        .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+        .onSelectionChanged!({1});
+    await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('my-gigs')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -485,7 +496,7 @@ void main() {
     availabilityStore.dispose();
   });
 
-  testWidgets('demo gig bookings can be cancelled and become visible', (
+  testWidgets('demo gig bookings appear without a cancellation action', (
     tester,
   ) async {
     final availabilityStore = AvailabilityStore();
@@ -509,32 +520,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('View My Gigs'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Cancel Session'));
-    await tester.tap(find.text('Cancel Session'));
-    await tester.pumpAndSettle();
-    expect(find.text('Cancel this session?'), findsOneWidget);
-    await tester.tap(find.text('Confirm Cancellation'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pumpAndSettle();
-    expect(find.text('Session cancelled'), findsOneWidget);
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('my-gigs')), findsOneWidget);
+    expect(find.text('Cancel Session'), findsNothing);
     expect(
       (await repository.getGigData(DateTime(2026, 10, 18)))
           .bookings
           .single
           .status,
-      GigBookingStatus.cancelled,
+      GigBookingStatus.booked,
     );
-    await tester.scrollUntilVisible(
-      find.text('Cancelled sessions'),
-      250,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('Cancelled sessions'), findsOneWidget);
-    expect(find.text('Cancelled'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
@@ -595,9 +589,7 @@ void main() {
     availabilityStore.dispose();
   });
 
-  testWidgets('failed gig cancellation keeps the booking active', (
-    tester,
-  ) async {
+  testWidgets('booked gigs have no cancellation action', (tester) async {
     final availabilityStore = AvailabilityStore();
     final repository = _FailingGigRepository(
       bookings: [
@@ -622,13 +614,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('My Gigs'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Cancel Session'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Confirm Cancellation'));
-    await tester.pumpAndSettle();
-    expect(find.text('Cancellation rejected for test.'), findsOneWidget);
-    expect(find.text('Session cancelled'), findsNothing);
-    expect(find.text('In Progress'), findsOneWidget);
+    expect(find.text('Booked'), findsOneWidget);
+    expect(find.text('Cancel Session'), findsNothing);
+    expect(find.text('Confirm Cancellation'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
@@ -698,19 +686,25 @@ void main() {
       );
       await _pumpIncomingOfferDialog(tester, offerStore);
 
-      expect(find.text('NEW ORDER'), findsOneWidget);
+      expect(find.text('New order!'), findsOneWidget);
       expect(find.text('#MS-2051'), findsOneWidget);
       expect(find.text('₹40'), findsOneWidget);
       expect(find.text('Fresh Basket'), findsOneWidget);
       expect(find.text('12 Market Road'), findsWidgets);
-      expect(find.text('Lakshmi Nagar'), findsWidgets);
-      expect(find.text('Pickup · 1.8 km'), findsOneWidget);
+      expect(find.textContaining('Lakshmi Nagar'), findsOneWidget);
+      expect(find.textContaining('Pickup: 1.8 km'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('incoming-order-accept')),
         findsOneWidget,
       );
+      expect(find.textContaining('left to reject'), findsOneWidget);
+      expect(find.text('30s'), findsOneWidget);
+      expect(tester.getSize(find.byType(Dialog)), const Size(360, 800));
 
-      await tester.tap(find.byKey(const ValueKey('incoming-order-accept')));
+      await tester.drag(
+        find.byKey(const ValueKey('incoming-order-accept-track')),
+        const Offset(500, 0),
+      );
       await tester.pumpAndSettle();
       expect(offerStore.status, OrderOfferStatus.accepted);
       expect(offerStore.activeDelivery?.orderId, '#MS-2051');
@@ -730,23 +724,33 @@ void main() {
     );
     await _pumpIncomingOfferDialog(tester, offerStore);
 
-    await tester.tap(find.byKey(const ValueKey('incoming-order-reject')));
+    await tester.drag(
+      find.byKey(const ValueKey('incoming-order-accept-track')),
+      const Offset(-500, 0),
+    );
     await tester.pumpAndSettle();
     expect(offerStore.status, OrderOfferStatus.rejected);
     expect(offerStore.activeDelivery, isNull);
+    expect(offerStore.offer, isNull);
+    expect(offerStore.rejectedOffers, hasLength(1));
+    expect(offerStore.rejectedOffers.single.delivery.orderId, '#MS-2051');
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
   });
 
-  testWidgets('incoming alert repeats until its 30-second window ends', (
+  testWidgets('incoming alert repeats with strong vibration for 30 seconds', (
     tester,
   ) async {
     var playCount = 0;
     var stopCount = 0;
     var activePlayers = 0;
     var maxActivePlayers = 0;
+    var vibrationCount = 0;
     final alert = NewOrderAlert(
+      vibrate: () async {
+        vibrationCount++;
+      },
       stopSound: () async {
         stopCount++;
       },
@@ -769,10 +773,9 @@ void main() {
     expect(playCount, 2);
     await tester.pump(const Duration(seconds: 8));
     expect(playCount, 3);
-    await tester.pump(const Duration(seconds: 8));
-    expect(playCount, 4);
-    await tester.pump(const Duration(seconds: 5, milliseconds: 999));
+    await tester.pump(const Duration(seconds: 13, milliseconds: 999));
     expect(stopCount, 0);
+    expect(vibrationCount, greaterThanOrEqualTo(59));
 
     await tester.pump(const Duration(milliseconds: 1));
     expect(stopCount, 1);
@@ -781,6 +784,78 @@ void main() {
     expect(playCount, 4);
     expect(maxActivePlayers, 1);
     await alert.dispose();
+  });
+
+  testWidgets('new order offer expires after 30 seconds by default', (
+    tester,
+  ) async {
+    final harness = await _pumpOfferPage(tester, activeDelivery: null);
+
+    expect(harness.offerStore.secondsRemaining, 30);
+    await tester.pump(const Duration(seconds: 29));
+    expect(harness.offerStore.secondsRemaining, 1);
+    expect(harness.offerStore.canShowOffer, isTrue);
+    await tester.pump(const Duration(seconds: 1));
+    expect(harness.offerStore.status, OrderOfferStatus.expired);
+    expect(harness.offerStore.canShowOffer, isFalse);
+
+    await _disposeOfferHarness(tester, harness);
+  });
+
+  testWidgets('browser sound alert waits for an explicit activation tap', (
+    tester,
+  ) async {
+    final playback = Completer<void>();
+    var playCount = 0;
+    final alert = NewOrderAlert(
+      requireUserGestureForSound: true,
+      playSound: () {
+        playCount++;
+        return playCount == 1 ? playback.future : Completer<void>().future;
+      },
+      vibrate: () async {},
+    );
+    addTearDown(alert.dispose);
+
+    alert.start('browser-order');
+    await tester.pump();
+    expect(alert.soundNeedsActivation, isTrue);
+    expect(playCount, 0);
+
+    alert.enableSound();
+    await tester.pump();
+    expect(alert.soundNeedsActivation, isFalse);
+    expect(playCount, 1);
+
+    playback.complete();
+    await tester.pump();
+    await alert.stop();
+  });
+
+  testWidgets('incoming browser offer exposes a sound activation button', (
+    tester,
+  ) async {
+    final availability = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availability,
+      activeDelivery: null,
+    );
+    var activationCount = 0;
+    await _pumpIncomingOfferDialog(
+      tester,
+      offerStore,
+      soundNeedsActivation: true,
+      onEnableSound: () => activationCount++,
+    );
+
+    final enableSoundButton = find.widgetWithText(TextButton, 'Enable sound');
+    expect(enableSoundButton, findsOneWidget);
+    await tester.tap(enableSoundButton);
+    expect(activationCount, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availability.dispose();
   });
 
   testWidgets('incoming alert stops early and ignores duplicate order IDs', (
@@ -985,147 +1060,88 @@ void main() {
     await _disposeOfferHarness(tester, harness);
   });
 
-  testWidgets(
-    'pickup and customer flow uses only the required explicit actions',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final availabilityStore = AvailabilityStore();
-      final offerStore = OrderOfferStore(
-        availabilityStore: availabilityStore,
-        activeDelivery: null,
-      );
-      expect(offerStore.reachStore(DemoDelivery.newOffer), isFalse);
-      expect(offerStore.acceptOffer(), isTrue);
-      final delivery = offerStore.activeDelivery!;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: DeliveryPage(delivery: delivery, offerStore: offerStore),
+  testWidgets('pickup confirmation switches the map to the customer', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final availabilityStore = AvailabilityStore();
+    final offerStore = OrderOfferStore(
+      availabilityStore: availabilityStore,
+      activeDelivery: null,
+    );
+    expect(offerStore.reachStore(DemoDelivery.newOffer), isFalse);
+    expect(offerStore.acceptOffer(), isTrue);
+    final delivery = offerStore.activeDelivery!;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: DeliveryPage(
+          delivery: delivery,
+          offerStore: offerStore,
+          showMapTiles: false,
         ),
-      );
+      ),
+    );
 
-      expect(offerStore.pickupStatus, PickupStatus.goingToPickup);
-      expect(offerStore.openOrderDetails(delivery), isFalse);
-      expect(offerStore.verifyPickup(delivery, '2051'), isFalse);
-      expect(offerStore.reachStore(DemoDelivery.batchThreeActive), isFalse);
-      expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      expect(offerStore.isBusy, isTrue);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(find.text('Going to Pickup'), findsOneWidget);
+    expect(offerStore.pickupStatus, PickupStatus.goingToPickup);
+    expect(offerStore.openOrderDetails(delivery), isFalse);
+    expect(offerStore.verifyPickup(delivery, '2051'), isFalse);
+    expect(offerStore.reachStore(DemoDelivery.batchThreeActive), isFalse);
+    expect(offerStore.completeActiveDelivery(delivery), isFalse);
+    expect(offerStore.isBusy, isTrue);
+    expect(offerStore.showAnotherDemoOffer(), isFalse);
+    expect(find.text('Going to Pickup'), findsOneWidget);
 
-      await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'Reached Store'),
-        200,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.ensureVisible(find.text('Reached Store'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Reached Store'));
-      await tester.pumpAndSettle();
-      expect(offerStore.pickupStatus, PickupStatus.reachedPickup);
-      expect(find.text('Reached Store'), findsOneWidget);
-      expect(find.text('Order Details'), findsWidgets);
-      expect(tester.takeException(), isNull);
+    expect(offerStore.reachStore(delivery), isTrue);
+    expect(offerStore.pickupStatus, PickupStatus.reachedPickup);
+    await tester.pump();
+    await tester.dragFrom(const Offset(180, 700), const Offset(0, -600));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('view-pickup-order')), findsOneWidget);
+    expect(find.text('Reached Store'), findsOneWidget);
+    expect(find.text('Fresh vegetables'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('view-pickup-order')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(offerStore.pickupStatus, PickupStatus.orderDetails);
+    expect(find.text('Order ID'), findsOneWidget);
+    expect(find.text('#MS-2051'), findsOneWidget);
+    expect(find.text('Items to collect'), findsOneWidget);
+    expect(find.text('Fresh vegetables'), findsOneWidget);
+    expect(find.text('Milk'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
-      availabilityStore.setAvailable(false);
-      await tester.pumpAndSettle();
-      expect(offerStore.activeDelivery, same(delivery));
-      expect(offerStore.pickupStatus, PickupStatus.reachedPickup);
-      expect(offerStore.isBusy, isTrue);
+    availabilityStore.setAvailable(false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(offerStore.activeDelivery, same(delivery));
+    expect(offerStore.pickupStatus, PickupStatus.orderDetails);
+    expect(offerStore.isBusy, isTrue);
 
-      await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'Order Details'),
-        200,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.tap(find.widgetWithText(FilledButton, 'Order Details'));
-      await tester.pumpAndSettle();
-      expect(offerStore.pickupStatus, PickupStatus.orderDetails);
-      expect(find.text('Order Details'), findsWidgets);
-      final verifyButton = find.widgetWithText(FilledButton, 'Verify Pickup');
-      await tester.drag(find.byType(ListView).last, const Offset(0, -350));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(verifyButton);
-      await tester.tap(verifyButton);
-      await tester.pumpAndSettle();
-      expect(find.text('Enter the last 4 digits.'), findsOneWidget);
-
-      await tester.enterText(find.byType(TextFormField), '1234');
-      await tester.drag(find.byType(ListView).last, const Offset(0, -200));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(verifyButton);
-      await tester.tap(verifyButton);
-      await tester.pumpAndSettle();
-      expect(find.text('Those digits do not match the order.'), findsOneWidget);
-      expect(offerStore.pickupStatus, PickupStatus.orderDetails);
-      expect(offerStore.verifyPickup(delivery, '20a51'), isFalse);
-
-      await tester.enterText(find.byType(TextFormField), '2051');
-      await tester.drag(find.byType(ListView).last, const Offset(0, -200));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(verifyButton);
-      await tester.tap(verifyButton);
-      await tester.pumpAndSettle();
-      expect(offerStore.pickupStatus, PickupStatus.pickedUp);
-      expect(find.text('Pickup Confirmed'), findsWidgets);
-      expect(find.text('Start Delivery'), findsOneWidget);
-      expect(offerStore.isBusy, isTrue);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      expect(tester.takeException(), isNull);
-
-      await tester.ensureVisible(find.text('Start Delivery'));
-      await tester.tap(find.text('Start Delivery'));
-      await tester.pumpAndSettle();
-      expect(offerStore.pickupStatus, PickupStatus.onTheWay);
-      expect(find.text('Going to Customer'), findsOneWidget);
-      expect(find.text('Customer: Ananya Reddy'), findsOneWidget);
-      expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      expect(offerStore.isBusy, isTrue);
-      expect(tester.takeException(), isNull);
-
-      expect(find.text('Reached Customer'), findsOneWidget);
-      expect(offerStore.isBusy, isTrue);
-      expect(offerStore.canAccept, isFalse);
-      expect(offerStore.acceptOffer(), isFalse);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(tester.takeException(), isNull);
-
-      expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      await tester.dragFrom(const Offset(180, 650), const Offset(0, -500));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Reached Customer'));
-      await tester.pumpAndSettle();
-      expect(offerStore.deliveryStatus, DeliveryStatus.reachedCustomer);
-      expect(offerStore.isBusy, isTrue);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(find.text('Customer & Order Details'), findsOneWidget);
-      expect(find.text('Hand Over'), findsOneWidget);
-      await tester.tap(find.text('Hand Over'));
-      await tester.pumpAndSettle();
-      expect(offerStore.deliveryStatus, DeliveryStatus.handOver);
-      expect(offerStore.isBusy, isTrue);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(find.text('Mark Delivered'), findsOneWidget);
-      await _scrollDeliveryActionIntoView(tester, find.text('Mark Delivered'));
-      await tester.tap(find.text('Mark Delivered'));
-      await tester.pumpAndSettle();
-      expect(offerStore.deliveryStatus, DeliveryStatus.delivered);
-      expect(offerStore.activeDelivery, isNull);
-      expect(offerStore.isBusy, isFalse);
-      expect(offerStore.completeActiveDelivery(delivery), isFalse);
-      expect(availabilityStore.isAvailable, isFalse);
-      expect(offerStore.showAnotherDemoOffer(), isFalse);
-      expect(find.text('Delivery completed successfully.'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      offerStore.dispose();
-      availabilityStore.dispose();
-    },
-  );
+    expect(find.text('Pickup address'), findsOneWidget);
+    expect(find.text('Delivery address'), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('I picked up the order'), findsOneWidget);
+    await tester.tap(find.text('I picked up the order'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(offerStore.pickupStatus, PickupStatus.onTheWay);
+    await tester.dragFrom(const Offset(180, 700), const Offset(0, 600));
+    await tester.pump();
+    expect(find.text('Route to Customer'), findsOneWidget);
+    final routeMap = tester.widget<RiderMapView>(
+      find.byKey(const ValueKey('delivery-route-map')),
+    );
+    expect(routeMap.navigationTarget, const LatLng(16.8584, 81.9421));
+    expect(offerStore.isBusy, isTrue);
+    expect(offerStore.showAnotherDemoOffer(), isFalse);
+    expect(offerStore.completeActiveDelivery(delivery), isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    offerStore.dispose();
+    availabilityStore.dispose();
+  });
 
   testWidgets('pickup state persists across tabs and delivery navigation', (
     tester,
@@ -2383,8 +2399,10 @@ void _advancePickupToPickedUp(OrderOfferStore offerStore) {
 
 Future<void> _pumpIncomingOfferDialog(
   WidgetTester tester,
-  OrderOfferStore offerStore,
-) async {
+  OrderOfferStore offerStore, {
+  bool soundNeedsActivation = false,
+  VoidCallback? onEnableSound,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
@@ -2395,8 +2413,11 @@ Future<void> _pumpIncomingOfferDialog(
               onPressed: () => showDialog<bool>(
                 context: context,
                 barrierDismissible: false,
-                builder: (_) =>
-                    IncomingOrderOfferDialog(offerStore: offerStore),
+                builder: (_) => IncomingOrderOfferDialog(
+                  offerStore: offerStore,
+                  soundNeedsActivation: soundNeedsActivation,
+                  onEnableSound: onEnableSound ?? () {},
+                ),
               ),
               child: const Text('Open incoming offer'),
             ),
@@ -2421,19 +2442,6 @@ Future<void> _scrollHomeTo(WidgetTester tester, Finder target) async {
   expect(target, findsOneWidget);
   await tester.ensureVisible(target);
   await tester.pumpAndSettle();
-}
-
-Future<void> _scrollDeliveryActionIntoView(
-  WidgetTester tester,
-  Finder action,
-) async {
-  await tester.scrollUntilVisible(
-    action,
-    200,
-    scrollable: find
-        .ancestor(of: action, matching: find.byType(Scrollable))
-        .first,
-  );
 }
 
 Future<void> _scrollHomeToTop(WidgetTester tester) async {
@@ -2466,7 +2474,7 @@ Future<_OfferHarness> _pumpOfferPage(
   WidgetTester tester, {
   AvailabilityStatus initialAvailability = AvailabilityStatus.available,
   DemoDelivery? activeDelivery = DemoDelivery.batchThreeActive,
-  Duration offerDuration = const Duration(seconds: 20),
+  Duration offerDuration = const Duration(seconds: 30),
 }) async {
   final availabilityStore = AvailabilityStore(
     initialStatus: initialAvailability,

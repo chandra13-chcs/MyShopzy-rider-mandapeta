@@ -2,6 +2,13 @@ import 'dart:math' as math;
 
 enum DeliveryTimeWindow { day, evening }
 
+class DeliveryLineItem {
+  const DeliveryLineItem({required this.name, required this.quantity});
+
+  final String name;
+  final int quantity;
+}
+
 class DemoDelivery {
   const DemoDelivery({
     required this.orderId,
@@ -14,6 +21,7 @@ class DemoDelivery {
     required this.status,
     this.pickupDistanceKm,
     this.deliveryDistanceKm,
+    this.items = const [],
     this.storePhone,
     this.customerPhone,
     this.pickupLatitude,
@@ -25,6 +33,7 @@ class DemoDelivery {
     this.timeWindow = DeliveryTimeWindow.day,
     this.rain = false,
     this.hasRouteEstimate = true,
+    this.isLocationDemo = false,
   });
 
   static const batchThreeActive = DemoDelivery(
@@ -51,10 +60,46 @@ class DemoDelivery {
     status: 'New Offer',
     pickupDistanceKm: 1.8,
     deliveryDistanceKm: 2.4,
+    pickupLatitude: 16.8668,
+    pickupLongitude: 81.9296,
+    dropLatitude: 16.8584,
+    dropLongitude: 81.9421,
+    items: [
+      DeliveryLineItem(name: 'Fresh vegetables', quantity: 2),
+      DeliveryLineItem(name: 'Milk', quantity: 1),
+    ],
     customerPhone: null,
     storePhone: null,
     timeWindow: DeliveryTimeWindow.day,
   );
+
+  factory DemoDelivery.nearbyDemoOffer({
+    required double riderLatitude,
+    required double riderLongitude,
+  }) {
+    return DemoDelivery(
+      orderId: newOffer.orderId,
+      store: 'Local Demo Kitchen',
+      customer: 'Demo Customer',
+      pickup: 'Your current location (demo)',
+      drop: 'Same location (demo)',
+      distanceKm: 0,
+      payout: newOffer.payout,
+      status: newOffer.status,
+      pickupDistanceKm: 0,
+      deliveryDistanceKm: 0,
+      items: const [
+        DeliveryLineItem(name: 'Demo meal combo', quantity: 1),
+        DeliveryLineItem(name: 'Water bottle', quantity: 1),
+      ],
+      pickupLatitude: riderLatitude,
+      pickupLongitude: riderLongitude,
+      dropLatitude: riderLatitude,
+      dropLongitude: riderLongitude,
+      timeWindow: newOffer.timeWindow,
+      isLocationDemo: true,
+    );
+  }
 
   factory DemoDelivery.fromRiderApiJson(Map<String, dynamic> json) {
     final orderId = json['orderId'];
@@ -98,6 +143,7 @@ class DemoDelivery {
       status: json['status'] is String ? json['status'] as String : 'New Offer',
       pickupDistanceKm: pickupDistanceKm,
       deliveryDistanceKm: deliveryDistanceKm,
+      items: _parseItems(json['items']),
       hasRouteEstimate:
           distanceKm != null ||
           pickupDistanceKm != null ||
@@ -122,10 +168,12 @@ class DemoDelivery {
   final String status;
   final double? pickupDistanceKm;
   final double? deliveryDistanceKm;
+  final List<DeliveryLineItem> items;
   final String vehicle;
   final DeliveryTimeWindow timeWindow;
   final bool rain;
   final bool hasRouteEstimate;
+  final bool isLocationDemo;
 
   double get effectiveDeliveryDistance => deliveryDistanceKm ?? distanceKm;
 
@@ -190,6 +238,32 @@ class DemoDelivery {
     return parts.isEmpty ? 'Address unavailable' : parts.join(', ');
   }
 
+  static List<DeliveryLineItem> _parseItems(Object? value) {
+    if (value == null) return const [];
+    if (value is! List) {
+      throw const FormatException('Order items must be a list.');
+    }
+
+    final items = <DeliveryLineItem>[];
+    for (final item in value) {
+      if (item is! Map<String, dynamic>) {
+        throw const FormatException('Order contains an invalid item.');
+      }
+      final name = item['name'];
+      final quantity = _optionalInteger(item['quantity']);
+      if (name is! String ||
+          name.trim().isEmpty ||
+          quantity == null ||
+          quantity < 1) {
+        throw const FormatException(
+          'Order item is missing its name or quantity.',
+        );
+      }
+      items.add(DeliveryLineItem(name: name.trim(), quantity: quantity));
+    }
+    return List.unmodifiable(items);
+  }
+
   static int? _optionalInteger(Object? value) {
     if (value is int) return value;
     if (value is String) {
@@ -250,9 +324,11 @@ class DemoDelivery {
     status: status ?? this.status,
     pickupDistanceKm: pickupDistanceKm ?? this.pickupDistanceKm,
     deliveryDistanceKm: deliveryDistanceKm ?? this.deliveryDistanceKm,
+    items: items,
     vehicle: vehicle,
     timeWindow: timeWindow ?? this.timeWindow,
     rain: rain ?? this.rain,
     hasRouteEstimate: hasRouteEstimate ?? this.hasRouteEstimate,
+    isLocationDemo: isLocationDemo,
   );
 }
