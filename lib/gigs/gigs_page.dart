@@ -266,105 +266,142 @@ class _GigsPageState extends State<GigsPage> {
           child: child,
         ),
       ),
-      child: Card(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _openSession(session),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 290;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(_sessionIcon(session), color: color),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(session.name, style: AppTheme.cardTitle),
-                              const SizedBox(height: 3),
-                              Text(
-                                _timeRange(context, session),
-                                style: AppTheme.secondaryTextStyle,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!compact) _StatusPill(label: status, color: color),
-                      ],
-                    ),
-                    if (compact) ...[
-                      const SizedBox(height: 10),
-                      _StatusPill(label: status, color: color),
-                    ],
-                    const SizedBox(height: 14),
-                    if (compact)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatDate(context, _today),
-                            style: AppTheme.secondaryTextStyle,
-                          ),
-                          const SizedBox(height: 5),
-                          const Text(
-                            'Book any time',
-                            style: AppTheme.smallStatus,
-                          ),
-                        ],
-                      )
-                    else
+      child: _GigDepth(
+        child: Card(
+          elevation: 3,
+          shadowColor: AppTheme.brand.withValues(alpha: 0.14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: AppTheme.brand.withValues(alpha: 0.14)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _openSession(session),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 290;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
                         children: [
-                          Icon(
-                            Icons.event_outlined,
-                            size: 17,
-                            color: AppTheme.secondaryText,
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color == AppTheme.brand
+                                  ? AppTheme.lightGreenSurface
+                                  : color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: color == AppTheme.brand
+                                    ? AppTheme.brandYellow.withValues(
+                                        alpha: 0.8,
+                                      )
+                                    : color.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Icon(_sessionIcon(session), color: color),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              _formatDate(context, _today),
-                              style: AppTheme.secondaryTextStyle,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(session.name, style: AppTheme.cardTitle),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _timeRange(context, session),
+                                  style: AppTheme.secondaryTextStyle,
+                                ),
+                              ],
                             ),
                           ),
-                          const Text(
-                            'Book any time',
-                            style: AppTheme.smallStatus,
-                          ),
+                          if (!compact)
+                            _StatusPill(label: status, color: color),
                         ],
                       ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        key: ValueKey('gig-book-${_sessions.indexOf(session)}'),
-                        onPressed: canBook ? () => _openSession(session) : null,
-                        child: Text(
-                          isBooked
-                              ? 'Booked'
-                              : _loadError != null
-                              ? 'Unavailable'
-                              : 'Book Session',
+                      if (compact) ...[
+                        const SizedBox(height: 10),
+                        _StatusPill(label: status, color: color),
+                      ],
+                      const SizedBox(height: 14),
+                      if (compact)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _formatDate(context, _today),
+                              style: AppTheme.secondaryTextStyle.copyWith(
+                                color: AppTheme.darkGreen,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            const _StatusPill(
+                              label: 'Book any time',
+                              color: AppTheme.brand,
+                            ),
+                          ],
+                        )
+                      else
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.event_outlined,
+                              size: 17,
+                              color: AppTheme.secondaryText,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _formatDate(context, _today),
+                                style: AppTheme.secondaryTextStyle.copyWith(
+                                  color: AppTheme.darkGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const _StatusPill(
+                              label: 'Book any time',
+                              color: AppTheme.brand,
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          key: ValueKey(
+                            'gig-book-${_sessions.indexOf(session)}',
+                          ),
+                          onPressed: canBook
+                              ? () => _openSession(session)
+                              : null,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.brandYellow,
+                            foregroundColor: AppTheme.darkGreen,
+                            disabledBackgroundColor: AppTheme.lightGreenSurface,
+                            disabledForegroundColor: AppTheme.darkGreen,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          child: Text(
+                            isBooked
+                                ? 'Booked'
+                                : _loadError != null
+                                ? 'Unavailable'
+                                : 'Book Session',
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -513,24 +550,28 @@ class _GigsPageState extends State<GigsPage> {
         ? 'Cancelled'
         : 'Booked';
     final statusColor = status == 'Cancelled' ? AppTheme.error : AppTheme.brand;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(session.name, style: AppTheme.cardTitle)),
-                _StatusPill(label: status, color: statusColor),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${_timeRange(context, session)} · ${_formatDate(context, booking.date)}',
-              style: AppTheme.secondaryTextStyle,
-            ),
-          ],
+    return _GigDepth(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(session.name, style: AppTheme.cardTitle),
+                  ),
+                  _StatusPill(label: status, color: statusColor),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${_timeRange(context, session)} · ${_formatDate(context, booking.date)}',
+                style: AppTheme.secondaryTextStyle,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -635,7 +676,7 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
                 children: [
                   const Icon(
                     Icons.delivery_dining_rounded,
-                    color: Color(0xFFE23744),
+                    color: AppTheme.brand,
                     size: 34,
                   ),
                   const SizedBox(height: 14),
@@ -700,6 +741,92 @@ class _GigSessionDetailsPageState extends State<GigSessionDetailsPage> {
   }
 }
 
+class _GigDepth extends StatefulWidget {
+  const _GigDepth({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_GigDepth> createState() => _GigDepthState();
+}
+
+class _GigDepthState extends State<_GigDepth> {
+  double _tiltX = 0;
+  double _tiltY = 0;
+  bool _hovered = false;
+  bool _pressed = false;
+
+  void _onHover(PointerEvent event) {
+    final size = context.size;
+    if (size == null) return;
+    setState(() {
+      _hovered = true;
+      _tiltX = ((event.localPosition.dx / size.width) * 2 - 1).clamp(-1.0, 1.0);
+      _tiltY = ((event.localPosition.dy / size.height) * 2 - 1).clamp(
+        -1.0,
+        1.0,
+      );
+    });
+  }
+
+  void _reset() {
+    setState(() {
+      _hovered = false;
+      _pressed = false;
+      _tiltX = 0;
+      _tiltY = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final motionDisabled = MediaQuery.disableAnimationsOf(context);
+    final pressed = !motionDisabled && _pressed;
+    final hovered = !motionDisabled && _hovered;
+    final tiltX = hovered ? _tiltY * 0.018 : 0.0;
+    final tiltY = hovered ? -_tiltX * 0.018 : 0.0;
+    final scale = pressed
+        ? 0.985
+        : hovered
+        ? 1.012
+        : 1.0;
+    final transform = Matrix4.identity()
+      ..setEntry(3, 2, 0.001)
+      ..rotateX(tiltX)
+      ..rotateY(tiltY)
+      ..translateByDouble(
+        0,
+        pressed
+            ? 2
+            : hovered
+            ? -2
+            : 0,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, scale, 1);
+
+    if (motionDisabled) return widget.child;
+
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: MouseRegion(
+        onHover: _onHover,
+        onExit: (_) => _reset(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          transformAlignment: Alignment.center,
+          transform: transform,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
 class _PageIntro extends StatelessWidget {
   const _PageIntro({
     required this.title,
@@ -718,10 +845,20 @@ class _PageIntro extends StatelessWidget {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: const Color(0xFFE23744).withValues(alpha: 0.1),
+          color: AppTheme.lightGreenSurface,
           borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: AppTheme.brandYellow.withValues(alpha: 0.85),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.brand.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Icon(icon, color: const Color(0xFFE23744)),
+        child: Icon(icon, color: AppTheme.darkGreen),
       ),
       const SizedBox(width: 12),
       Expanded(
@@ -748,14 +885,15 @@ class _GigBookingHero extends StatelessWidget {
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [AppTheme.darkGreen, AppTheme.brand],
+        colors: [AppTheme.darkGreen, AppTheme.brand, Color(0xFF258253)],
       ),
       borderRadius: BorderRadius.circular(22),
       boxShadow: const [
         BoxShadow(
           color: Color(0x332E7D32),
-          blurRadius: 18,
-          offset: Offset(0, 8),
+          blurRadius: 24,
+          spreadRadius: 1,
+          offset: Offset(0, 11),
         ),
       ],
     ),
@@ -838,12 +976,19 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
+      color: color == AppTheme.brand
+          ? AppTheme.lightGreenSurface
+          : color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.32)),
     ),
     child: Text(
       label,
-      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+      style: TextStyle(
+        color: color == AppTheme.brand ? AppTheme.darkGreen : color,
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+      ),
     ),
   );
 }
@@ -858,7 +1003,7 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, color: const Color(0xFFE23744), size: 19),
+      Icon(icon, color: AppTheme.brand, size: 19),
       const SizedBox(width: 10),
       Expanded(child: Text(label, style: AppTheme.bodyText)),
     ],

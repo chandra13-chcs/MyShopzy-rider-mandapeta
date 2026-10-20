@@ -92,6 +92,7 @@ abstract final class AppTheme {
         foregroundColor: surface,
         elevation: 0,
         scrolledUnderElevation: 0,
+        shape: Border(bottom: BorderSide(color: Color(0x66F2C94C), width: 1.5)),
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: surface,
@@ -105,14 +106,33 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 2,
-        shadowColor: const Color(0x17123D30),
+        elevation: 3,
+        shadowColor: const Color(0x1F103D2B),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFE3EBE5)),
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Color(0xFFDCEBE0)),
         ),
         margin: EdgeInsets.zero,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 14,
+        shadowColor: const Color(0x33103D2B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+          side: const BorderSide(color: Color(0xFFDCEBE0)),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: brandYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: divider,
@@ -138,8 +158,8 @@ abstract final class AppTheme {
             FilledButton.styleFrom(
               backgroundColor: brand,
               foregroundColor: surface,
-              disabledBackgroundColor: divider,
-              disabledForegroundColor: secondaryText,
+              disabledBackgroundColor: lightGreenSurface,
+              disabledForegroundColor: darkGreen,
               textStyle: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
@@ -147,7 +167,7 @@ abstract final class AppTheme {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              minimumSize: const Size(48, 44),
+              minimumSize: const Size(48, 48),
             ).copyWith(
               animationDuration: const Duration(milliseconds: 180),
               elevation: _buttonElevation,
@@ -160,7 +180,7 @@ abstract final class AppTheme {
         style:
             OutlinedButton.styleFrom(
               foregroundColor: brand,
-              disabledForegroundColor: secondaryText,
+              disabledForegroundColor: darkGreen,
               side: const BorderSide(color: brand),
               textStyle: const TextStyle(
                 fontWeight: FontWeight.w700,
@@ -169,7 +189,7 @@ abstract final class AppTheme {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              minimumSize: const Size(48, 44),
+              minimumSize: const Size(48, 48),
             ).copyWith(
               animationDuration: const Duration(milliseconds: 180),
               elevation: _buttonElevation,
@@ -182,7 +202,7 @@ abstract final class AppTheme {
         style:
             TextButton.styleFrom(
               foregroundColor: brand,
-              disabledForegroundColor: secondaryText,
+              disabledForegroundColor: darkGreen,
               textStyle: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
@@ -212,8 +232,16 @@ abstract final class AppTheme {
       ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return success;
+          if (states.contains(WidgetState.selected)) return brand;
           return divider;
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return brandYellow;
+          return surface;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return brand;
+          return secondaryText.withValues(alpha: 0.35);
         }),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -291,6 +319,7 @@ abstract final class AppTheme {
     final focused = states.contains(WidgetState.focused);
     final disabled = states.contains(WidgetState.disabled);
     final motionDisabled = MediaQuery.disableAnimationsOf(context);
+    if (motionDisabled) return child ?? const SizedBox.shrink();
     final lift = pressed
         ? 2.0
         : hovered || focused

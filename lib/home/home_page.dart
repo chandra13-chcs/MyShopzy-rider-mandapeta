@@ -906,27 +906,63 @@ class _StatCardState extends State<_StatCard> {
         transformAlignment: Alignment.center,
         transform: transform,
         child: Card(
-          color: Colors.white,
+          color: AppTheme.surface,
+          elevation: isHovered ? 7 : 3,
+          shadowColor: AppTheme.brand.withValues(
+            alpha: isHovered ? 0.22 : 0.12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: isHovered
+                  ? AppTheme.brandYellow.withValues(alpha: 0.9)
+                  : AppTheme.brand.withValues(alpha: 0.12),
+              width: isHovered ? 1.5 : 1,
+            ),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(widget.icon, color: AppTheme.brand, size: 18),
-                    const SizedBox(width: 7),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.brandYellow.withValues(alpha: 0.45),
+                            AppTheme.lightGreenSurface,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        color: AppTheme.darkGreen,
+                        size: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Text(
                         widget.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTheme.smallStatus,
+                        style: AppTheme.smallStatus.copyWith(
+                          color: AppTheme.darkGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 12),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 5,
@@ -935,10 +971,21 @@ class _StatCardState extends State<_StatCard> {
                       widget.value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTheme.cardTitle,
+                      style: AppTheme.cardTitle.copyWith(
+                        color: AppTheme.darkGreen,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
                     ),
                     if (widget.detail != null)
-                      Text(widget.detail!, style: AppTheme.smallStatus),
+                      Text(
+                        widget.detail!,
+                        style: AppTheme.smallStatus.copyWith(
+                          color: AppTheme.secondaryText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                   ],
                 ),
               ],
