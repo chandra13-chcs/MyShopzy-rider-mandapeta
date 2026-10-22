@@ -46,9 +46,7 @@ class _RiderShellState extends State<RiderShell>
   double _tabSlideDirection = 1;
 
   late final _availabilityStore = AvailabilityStore(
-    initialStatus: widget.apiClient == null
-        ? AvailabilityStatus.available
-        : AvailabilityStatus.offline,
+    initialStatus: AvailabilityStatus.offline,
     apiClient: widget.apiClient,
   );
   late final _offerStore = OrderOfferStore(
@@ -86,15 +84,14 @@ class _RiderShellState extends State<RiderShell>
       duration: const Duration(milliseconds: 320),
     )..value = 1;
     WidgetsBinding.instance.addObserver(this);
+    _availabilityStore.addListener(_handleAvailabilityChanged);
     _offerStore.addListener(_handleOfferStoreChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (widget.showDemoOrder && widget.apiClient == null) {
         _offerStore.requireDemoOffersNearRider();
         final location = widget.demoRiderLocation;
-        if (location == null) {
-          unawaited(_availabilityStore.startLocalLocationTracking());
-        } else {
+        if (location != null) {
           _offerStore.setDemoOfferForRiderLocation(
             latitude: location.latitude,
             longitude: location.longitude,
@@ -108,6 +105,23 @@ class _RiderShellState extends State<RiderShell>
       }
       _handleOfferStoreChanged();
     });
+  }
+
+  void _handleAvailabilityChanged() {
+    if (_availabilityStore.isOnline &&
+        widget.showDemoOrder &&
+        widget.apiClient == null &&
+        !_demoOfferInitialized &&
+        _offerStore.offer == null &&
+        _offerStore.activeDelivery == null) {
+      _offerStore.setDemoOffer();
+      _demoOfferInitialized = true;
+    }
+    if (_availabilityStore.isOnline &&
+        widget.apiClient == null &&
+        widget.demoRiderLocation == null) {
+      unawaited(_availabilityStore.startLocalLocationTracking());
+    }
   }
 
   @override
@@ -222,6 +236,7 @@ class _RiderShellState extends State<RiderShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabTransitionController.dispose();
+    _availabilityStore.removeListener(_handleAvailabilityChanged);
     _offerStore.removeListener(_handleOfferStoreChanged);
     unawaited(_newOrderAlert.dispose());
     _offerStore.dispose();
@@ -313,47 +328,147 @@ class _RiderShellState extends State<RiderShell>
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        animationDuration: const Duration(milliseconds: 200),
-        onDestinationSelected: (index) {
-          if (index == _selectedIndex) return;
-          _tabSlideDirection = index > _selectedIndex ? 1 : -1;
-          setState(() => _selectedIndex = index);
-          if (MediaQuery.disableAnimationsOf(context)) {
-            _tabTransitionController.value = 1;
-          } else {
-            _tabTransitionController.forward(from: 0);
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.darkGreen, AppTheme.brand, AppTheme.darkGreen],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: 'Orders',
+          border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Earnings',
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.darkGreen.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            height: 76,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            indicatorColor: Colors.transparent,
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return TextStyle(
+                color: selected ? Colors.white : AppTheme.lightGreenSurface,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                letterSpacing: 0.1,
+              );
+            }),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.work_outline_rounded),
-            selectedIcon: Icon(Icons.work_rounded),
-            label: 'Gigs',
+          child: NavigationBar(
+            selectedIndex: _selectedIndex,
+            animationDuration: const Duration(milliseconds: 260),
+            onDestinationSelected: (index) {
+              if (index == _selectedIndex) return;
+              _tabSlideDirection = index > _selectedIndex ? 1 : -1;
+              setState(() => _selectedIndex = index);
+              if (MediaQuery.disableAnimationsOf(context)) {
+                _tabTransitionController.value = 1;
+              } else {
+                _tabTransitionController.forward(from: 0);
+              }
+            },
+            destinations: [
+              _navigationDestination(
+                icon: Icons.home_outlined,
+                selectedIcon: Icons.home_rounded,
+                label: 'Home',
+                color: AppTheme.accentGreen,
+              ),
+              _navigationDestination(
+                icon: Icons.receipt_long_outlined,
+                selectedIcon: Icons.receipt_long_rounded,
+                label: 'Orders',
+                color: AppTheme.accentGreen,
+              ),
+              _navigationDestination(
+                icon: Icons.account_balance_wallet_outlined,
+                selectedIcon: Icons.account_balance_wallet_rounded,
+                label: 'Earnings',
+                color: AppTheme.accentGreen,
+              ),
+              _navigationDestination(
+                icon: Icons.work_outline_rounded,
+                selectedIcon: Icons.work_rounded,
+                label: 'Gigs',
+                color: AppTheme.accentGreen,
+              ),
+              _navigationDestination(
+                icon: Icons.person_outline_rounded,
+                selectedIcon: Icons.person_rounded,
+                label: 'Profile',
+                color: AppTheme.accentGreen,
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  NavigationDestination _navigationDestination({
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+    required Color color,
+  }) {
+    final iconAnimationDuration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+    Widget buildIcon(IconData data, {required bool selected}) => AnimatedScale(
+      scale: selected ? 1 : 0.92,
+      duration: iconAnimationDuration,
+      curve: Curves.easeOutBack,
+      child: AnimatedContainer(
+        duration: iconAnimationDuration,
+        curve: Curves.easeOutCubic,
+        width: selected ? 42 : 36,
+        height: selected ? 34 : 32,
+        decoration: BoxDecoration(
+          gradient: selected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [color, color.withValues(alpha: 0.72)],
+                )
+              : null,
+          color: selected ? null : Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(selected ? 13 : 11),
+          border: Border.all(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.38)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.32),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : const [],
+        ),
+        child: Icon(
+          data,
+          size: selected ? 21 : 19,
+          color: selected ? AppTheme.darkGreen : color,
+        ),
+      ),
+    );
+
+    return NavigationDestination(
+      icon: buildIcon(icon, selected: false),
+      selectedIcon: buildIcon(selectedIcon, selected: true),
+      label: label,
     );
   }
 }

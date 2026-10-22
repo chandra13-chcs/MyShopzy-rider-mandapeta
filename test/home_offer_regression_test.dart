@@ -197,7 +197,9 @@ void main() {
   });
 
   testWidgets('safety banner opens the rider safety checklist', (tester) async {
-    final availability = AvailabilityStore();
+    final availability = AvailabilityStore(
+      initialStatus: AvailabilityStatus.offline,
+    );
     final store = OrderOfferStore(availabilityStore: availability);
     addTearDown(store.dispose);
     addTearDown(availability.dispose);
@@ -211,17 +213,19 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Start Delivering Safely'));
+    await tester.tap(find.text('Start Safe Delivery'));
     await tester.pumpAndSettle();
 
     expect(find.text('Quick safety check'), findsOneWidget);
-    expect(find.text('Wear and fasten your helmet'), findsOneWidget);
-    expect(find.text('Check your brakes and tires'), findsOneWidget);
-    expect(find.text('Secure your phone before moving'), findsOneWidget);
-    final readyButton = find.widgetWithText(
-      FilledButton,
-      'Ready to ride safely',
+    expect(find.text('I am wearing and fastening my helmet'), findsOneWidget);
+    expect(
+      find.text("I checked my bike's condition (brakes and tires)"),
+      findsOneWidget,
     );
+    expect(find.text("I have my phone and it's secured"), findsOneWidget);
+    final readyButton = find
+        .widgetWithText(FilledButton, 'Start Safe Delivery')
+        .last;
     expect(tester.widget<FilledButton>(readyButton).onPressed, isNull);
 
     for (var index = 0; index < 3; index++) {
@@ -233,6 +237,7 @@ void main() {
     await tester.tap(readyButton);
     await tester.pumpAndSettle();
     expect(find.text('Quick safety check'), findsNothing);
+    expect(availability.isOnline, isTrue);
   });
 
   test('new alert revisions can each start a sound alert', () async {

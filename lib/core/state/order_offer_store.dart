@@ -347,10 +347,22 @@ class OrderOfferStore extends ChangeNotifier {
   }) {
     if (apiClient != null || activeDelivery != null || _disposed) return;
     _demoOffersUseRiderLocation = true;
-    offer = DemoDelivery.nearbyDemoOffer(
-      riderLatitude: latitude,
-      riderLongitude: longitude,
+    _publishDemoOffer(
+      DemoDelivery.nearbyDemoOffer(
+        riderLatitude: latitude,
+        riderLongitude: longitude,
+      ),
     );
+  }
+
+  void setDemoOffer() {
+    if (apiClient != null || activeDelivery != null || _disposed) return;
+    _demoOffersUseRiderLocation = true;
+    _publishDemoOffer(DemoDelivery.newOffer);
+  }
+
+  void _publishDemoOffer(DemoDelivery demoOffer) {
+    offer = demoOffer;
     status = OrderOfferStatus.available;
     secondsRemaining = offerDuration.inSeconds;
     _offerRevision++;

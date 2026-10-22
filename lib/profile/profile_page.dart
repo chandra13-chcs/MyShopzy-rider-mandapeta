@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/state/availability_store.dart';
 import '../core/state/new_order_alert.dart';
@@ -24,6 +26,31 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   RiderProfileDemoData _profile = const RiderProfileDemoData();
+  Uint8List? _photoBytes;
+
+  Future<void> _chooseProfilePhoto() async {
+    try {
+      final photo = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 1400,
+      );
+      if (photo == null) return;
+      final bytes = await photo.readAsBytes();
+      if (!mounted) return;
+      setState(() => _photoBytes = bytes);
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open the photo picker.')),
+      );
+    } on Exception {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to load that profile photo.')),
+      );
+    }
+  }
 
   Future<void> _showEditProfile() async {
     final updatedProfile = await showDialog<RiderProfileDemoData>(
@@ -85,48 +112,51 @@ class _ProfilePageState extends State<ProfilePage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            _buildProfileHeader(),
+            _ProfileReveal(index: 0, child: _buildProfileHeader()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Rider performance'),
             const SizedBox(height: 10),
-            _buildPerformance(),
+            _ProfileReveal(index: 1, child: _buildPerformance()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Personal information'),
             const SizedBox(height: 10),
-            _buildPersonalInformation(),
+            _ProfileReveal(index: 2, child: _buildPersonalInformation()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Verification details'),
             const SizedBox(height: 10),
-            _buildVerificationDetails(),
+            _ProfileReveal(index: 3, child: _buildVerificationDetails()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Safety & emergency'),
             const SizedBox(height: 10),
-            _buildSafetySection(),
+            _ProfileReveal(index: 4, child: _buildSafetySection()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Account'),
             const SizedBox(height: 10),
-            _buildAccountSection(),
+            _ProfileReveal(index: 5, child: _buildAccountSection()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Profile actions'),
             const SizedBox(height: 10),
-            _buildProfileActions(),
+            _ProfileReveal(index: 6, child: _buildProfileActions()),
             const SizedBox(height: 18),
             const _SectionHeading(title: 'Legal'),
             const SizedBox(height: 10),
-            _buildLegalActions(),
+            _ProfileReveal(index: 7, child: _buildLegalActions()),
             const SizedBox(height: 18),
-            OutlinedButton.icon(
-              key: const ValueKey('profile-logout'),
-              onPressed: () => _showInformationDialog(
-                'Logout',
-                'Authentication will be connected in a future backend phase.',
-              ),
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Logout'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.error,
-                side: const BorderSide(color: AppTheme.error),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+            _ProfileReveal(
+              index: 8,
+              child: OutlinedButton.icon(
+                key: const ValueKey('profile-logout'),
+                onPressed: () => _showInformationDialog(
+                  'Logout',
+                  'Authentication will be connected in a future backend phase.',
+                ),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Logout'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.error,
+                  side: const BorderSide(color: AppTheme.error),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
           ],
@@ -137,65 +167,200 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildProfileHeader() {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.darkGreen, AppTheme.brand, Color(0xFF477F61)],
+          ),
+        ),
+        child: Stack(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const CircleAvatar(
-                  radius: 34,
-                  backgroundColor: AppTheme.brandSoft,
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 38,
-                    color: AppTheme.brand,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
+            Positioned(
+              right: -38,
+              top: -58,
+              child: _ProfileGlow(size: 150, opacity: 0.08),
+            ),
+            Positioned(
+              right: 78,
+              bottom: -74,
+              child: _ProfileGlow(size: 120, opacity: 0.06),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_profile.name, style: AppTheme.sectionTitle),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Rider ID: ${_profile.riderId}',
-                        style: AppTheme.secondaryTextStyle,
+                      TweenAnimationBuilder<double>(
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutBack,
+                        tween: Tween(begin: 0.86, end: 1),
+                        builder: (context, scale, child) =>
+                            Transform.scale(scale: scale, child: child),
+                        child: Semantics(
+                          button: true,
+                          label: 'Upload rider photo',
+                          child: Tooltip(
+                            message: 'Upload rider photo',
+                            child: InkWell(
+                              key: const ValueKey('profile-photo-upload'),
+                              onTap: _chooseProfilePhoto,
+                              customBorder: const CircleBorder(),
+                              child: SizedBox(
+                                width: 76,
+                                height: 76,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned(
+                                      left: 2,
+                                      top: 2,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              AppTheme.accentGreen,
+                                              AppTheme.brandYellow,
+                                              Colors.white,
+                                            ],
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.22,
+                                              ),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 6),
+                                            ),
+                                          ],
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 33,
+                                          backgroundColor:
+                                              AppTheme.lightGreenSurface,
+                                          backgroundImage: _photoBytes == null
+                                              ? null
+                                              : MemoryImage(_photoBytes!),
+                                          child: _photoBytes == null
+                                              ? const Icon(
+                                                  Icons.person_rounded,
+                                                  size: 40,
+                                                  color: AppTheme.brand,
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 0,
+                                      bottom: 0,
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.brandYellow,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: AppTheme.darkGreen,
+                                            width: 2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.18,
+                                              ),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.camera_alt_rounded,
+                                          size: 14,
+                                          color: AppTheme.darkGreen,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _profile.mobileNumber,
-                        style: AppTheme.secondaryTextStyle,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _profile.name,
+                              style: AppTheme.sectionTitle.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Rider ID: ${_profile.riderId}',
+                              style: AppTheme.secondaryTextStyle.copyWith(
+                                color: Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _profile.mobileNumber,
+                              style: AppTheme.secondaryTextStyle.copyWith(
+                                color: Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              'Tap photo to update',
+                              style: AppTheme.smallStatus.copyWith(
+                                color: AppTheme.brandYellow,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _showEditProfile,
+                        tooltip: 'Edit Profile',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.14),
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.edit_outlined),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  onPressed: _showEditProfile,
-                  tooltip: 'Edit Profile',
-                  icon: const Icon(Icons.edit_outlined, color: AppTheme.brand),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                StatusBadge(
-                  label: _profile.accountStatus,
-                  color: AppTheme.success,
-                  backgroundColor: AppTheme.successSoft,
-                ),
-                StatusBadge(
-                  label: _profile.verificationStatus,
-                  color: AppTheme.success,
-                  backgroundColor: AppTheme.successSoft,
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      StatusBadge(
+                        label: _profile.accountStatus,
+                        color: AppTheme.darkGreen,
+                        backgroundColor: AppTheme.lightGreenSurface,
+                      ),
+                      StatusBadge(
+                        label: _profile.verificationStatus,
+                        color: AppTheme.darkGreen,
+                        backgroundColor: const Color(0xFFF4E8CF),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -217,6 +382,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     value: '${_profile.rating.toStringAsFixed(1)} ⭐',
                     icon: Icons.star_rounded,
                     color: AppTheme.warning,
+                    backgroundColor: const Color(0xFFF7F0E2),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -225,6 +391,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     label: 'Total deliveries',
                     value: _profile.totalDeliveriesDisplay,
                     icon: Icons.delivery_dining_rounded,
+                    backgroundColor: AppTheme.lightGreenSurface,
                   ),
                 ),
               ],
@@ -237,6 +404,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     label: 'Completed',
                     value: _profile.completedDeliveriesDisplay,
                     icon: Icons.check_circle_outline_rounded,
+                    backgroundColor: const Color(0xFFEFF4EC),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -246,6 +414,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     value: _profile.cancelledDeliveries.toString(),
                     icon: Icons.cancel_outlined,
                     color: AppTheme.error,
+                    backgroundColor: AppTheme.errorSoft,
                   ),
                 ),
               ],
@@ -258,6 +427,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     label: 'Total earnings',
                     value: _profile.totalEarningsDisplay,
                     icon: Icons.payments_outlined,
+                    backgroundColor: const Color(0xFFEAF2EF),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -266,6 +436,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     label: 'This month',
                     value: '${_profile.monthlyDeliveries} deliveries',
                     icon: Icons.calendar_month_outlined,
+                    backgroundColor: const Color(0xFFF1F4ED),
                   ),
                 ),
               ],
@@ -618,48 +789,125 @@ class _SectionHeading extends StatelessWidget {
       Text(title, style: AppTheme.sectionTitle);
 }
 
+class _ProfileGlow extends StatelessWidget {
+  const _ProfileGlow({required this.size, required this.opacity});
+
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: opacity),
+      border: Border.all(color: Colors.white.withValues(alpha: opacity * 1.5)),
+    ),
+  );
+}
+
+class _ProfileReveal extends StatelessWidget {
+  const _ProfileReveal({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 820);
+    final start = (index * 0.085).clamp(0.0, 0.72);
+    final end = (start + 0.28).clamp(0.0, 1.0);
+    final entrance = Interval(start, end, curve: Curves.easeOutCubic);
+    return TweenAnimationBuilder<double>(
+      duration: duration,
+      tween: Tween(begin: 0, end: 1),
+      builder: (context, value, child) {
+        final progress = entrance.transform(value);
+        return Opacity(
+          opacity: progress,
+          child: Transform.translate(
+            offset: Offset(0, (1 - progress) * 14),
+            child: Transform.scale(
+              scale: 0.975 + (0.025 * progress),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
 class _PerformanceTile extends StatelessWidget {
   const _PerformanceTile({
     required this.label,
     required this.value,
     required this.icon,
     this.color = AppTheme.brand,
+    this.backgroundColor = AppTheme.performanceTile,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color color;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.performanceTile,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 6),
-          Text.rich(
-            TextSpan(text: value),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.cardTitle,
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    return TweenAnimationBuilder<double>(
+      duration: duration,
+      curve: Curves.easeOutBack,
+      tween: Tween(begin: 0.94, end: 1),
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 92),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [backgroundColor, Colors.white],
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.secondaryTextStyle,
-          ),
-        ],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.12)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 6),
+            Text.rich(
+              TextSpan(text: value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.cardTitle,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.secondaryTextStyle,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -681,7 +929,15 @@ class _InfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: AppTheme.brand),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppTheme.brandSoft,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppTheme.brand, size: 20),
+      ),
       title: Text(title, style: AppTheme.secondaryTextStyle),
       subtitle: Text(
         value,
@@ -713,9 +969,27 @@ class _ActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       key: tileKey,
-      leading: Icon(icon, color: AppTheme.brand),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.brandSoft,
+              AppTheme.accentGreen.withValues(alpha: 0.25),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppTheme.brand, size: 20),
+      ),
       title: Text(title),
-      trailing: const Icon(Icons.chevron_right_rounded),
+      trailing: const Icon(
+        Icons.arrow_forward_ios_rounded,
+        color: AppTheme.secondaryText,
+        size: 16,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onTap: onTap,
     );
   }

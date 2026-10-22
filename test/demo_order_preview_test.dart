@@ -23,6 +23,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(find.text('New order!'), findsNothing);
+    await _startSafeDelivery(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+
     expect(find.text('New order!'), findsOneWidget);
     expect(find.text('Expected earnings'), findsOneWidget);
     expect(find.text('PICK UP'), findsOneWidget);
@@ -55,6 +60,11 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(find.text('New order!'), findsNothing);
+    await _startSafeDelivery(tester);
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('New order!'), findsOneWidget);
@@ -93,4 +103,35 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('safe start shows a demo order without GPS permission', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const RiderApp(showDemoOrder: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(find.text('New order!'), findsNothing);
+
+    await _startSafeDelivery(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text("You're online"), findsOneWidget);
+    expect(find.text('New order!'), findsOneWidget);
+    expect(find.text('#MS-2051'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+Future<void> _startSafeDelivery(WidgetTester tester) async {
+  await tester.tap(find.byType(Switch).first);
+  await tester.pumpAndSettle();
+  for (var index = 0; index < 3; index++) {
+    await tester.tap(find.byType(Checkbox).at(index));
+    await tester.pump();
+  }
+  await tester.tap(find.text('Start Safe Delivery').last);
+  await tester.pump();
 }

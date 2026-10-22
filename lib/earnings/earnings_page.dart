@@ -35,68 +35,117 @@ class EarningsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Card(
-              color: AppTheme.darkGreen,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "TODAY'S EARNINGS",
-                      style: TextStyle(color: AppTheme.onDarkSurface),
+            _EarningsEntrance(
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkGreen,
+                        AppTheme.brand,
+                        Color(0xFF477F61),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    if (offerStore case final liveStore?)
-                      AnimatedBuilder(
-                        animation: liveStore,
-                        builder: (context, child) {
-                          final settlement = liveStore.todaySettlementMinor;
-                          return Text(
-                            settlement == null
-                                ? liveStore.apiClient == null
-                                      ? _currency(summary.today)
-                                      : _currency(0)
-                                : '₹${(settlement / 100).toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: AppTheme.surface,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 34,
+                  ),
+                  child: Stack(
+                    children: [
+                      const Positioned(
+                        right: -36,
+                        top: -54,
+                        child: _EarningsGlow(size: 150, opacity: 0.08),
+                      ),
+                      const Positioned(
+                        right: 72,
+                        bottom: -78,
+                        child: _EarningsGlow(size: 126, opacity: 0.06),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.account_balance_wallet_rounded,
+                                  color: AppTheme.brandYellow,
+                                  size: 19,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  "TODAY'S EARNINGS",
+                                  style: TextStyle(
+                                    color: AppTheme.onDarkSurface,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
-                      )
-                    else
-                      Text(
-                        _currency(summary.today),
-                        style: const TextStyle(
-                          color: AppTheme.surface,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 34,
+                            const SizedBox(height: 8),
+                            if (offerStore case final liveStore?)
+                              AnimatedBuilder(
+                                animation: liveStore,
+                                builder: (context, child) {
+                                  final settlement =
+                                      liveStore.todaySettlementMinor;
+                                  return Text(
+                                    settlement == null
+                                        ? liveStore.apiClient == null
+                                              ? _currency(summary.today)
+                                              : _currency(0)
+                                        : '₹${(settlement / 100).toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: AppTheme.surface,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 34,
+                                    ),
+                                  );
+                                },
+                              )
+                            else
+                              Text(
+                                _currency(summary.today),
+                                style: const TextStyle(
+                                  color: AppTheme.surface,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 34,
+                                ),
+                              ),
+                            const SizedBox(height: 6),
+                            if (offerStore case final liveStore?)
+                              AnimatedBuilder(
+                                animation: liveStore,
+                                builder: (context, child) => Text(
+                                  '${liveStore.todayCompletedDeliveries ?? (liveStore.apiClient == null ? 5 : 0)} deliveries completed',
+                                  style: const TextStyle(
+                                    color: AppTheme.onDarkSurface,
+                                  ),
+                                ),
+                              )
+                            else
+                              const Text(
+                                '5 deliveries completed',
+                                style: TextStyle(color: AppTheme.onDarkSurface),
+                              ),
+                            if (offerStore?.earningsErrorMessage
+                                case final error?) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                error,
+                                style: const TextStyle(
+                                  color: AppTheme.onDarkSurface,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                    const SizedBox(height: 6),
-                    if (offerStore case final liveStore?)
-                      AnimatedBuilder(
-                        animation: liveStore,
-                        builder: (context, child) => Text(
-                          '${liveStore.todayCompletedDeliveries ?? (liveStore.apiClient == null ? 5 : 0)} deliveries completed',
-                          style: const TextStyle(color: AppTheme.onDarkSurface),
-                        ),
-                      )
-                    else
-                      const Text(
-                        '5 deliveries completed',
-                        style: TextStyle(color: AppTheme.onDarkSurface),
-                      ),
-                    if (offerStore?.earningsErrorMessage case final error?) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        error,
-                        style: const TextStyle(color: AppTheme.onDarkSurface),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -197,6 +246,50 @@ class _SectionTitle extends StatelessWidget {
       Text(title, style: AppTheme.sectionTitle);
 }
 
+class _EarningsEntrance extends StatelessWidget {
+  const _EarningsEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 380);
+    return TweenAnimationBuilder<double>(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      tween: Tween(begin: 0, end: 1),
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 12),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _EarningsGlow extends StatelessWidget {
+  const _EarningsGlow({required this.size, required this.opacity});
+
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: opacity),
+      border: Border.all(color: Colors.white.withValues(alpha: opacity * 1.5)),
+    ),
+  );
+}
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.title,
@@ -212,28 +305,48 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.cardTitle,
+    return _EarningsEntrance(
+      child: Card(
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.09), AppTheme.surface],
             ),
-            const SizedBox(height: 3),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.secondaryTextStyle,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.cardTitle,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.secondaryTextStyle,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -253,31 +366,33 @@ class _BreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_title, style: AppTheme.cardTitle),
-            const SizedBox(height: 12),
-            _BreakdownRow(
-              label: 'Deliveries',
-              value: '${breakdown.deliveries}',
-            ),
-            const SizedBox(height: 8),
-            _BreakdownRow(
-              label: 'Distance',
-              value: '${_distance(breakdown.distanceKm)} km',
-            ),
-            const Divider(height: 20),
-            _BreakdownRow(
-              label: 'Earnings',
-              value: _currency(breakdown.earnings),
-              emphasize: true,
-            ),
-          ],
+    return _EarningsEntrance(
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_title, style: AppTheme.cardTitle),
+              const SizedBox(height: 12),
+              _BreakdownRow(
+                label: 'Deliveries',
+                value: '${breakdown.deliveries}',
+              ),
+              const SizedBox(height: 8),
+              _BreakdownRow(
+                label: 'Distance',
+                value: '${_distance(breakdown.distanceKm)} km',
+              ),
+              const Divider(height: 20),
+              _BreakdownRow(
+                label: 'Earnings',
+                value: _currency(breakdown.earnings),
+                emphasize: true,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -325,52 +440,54 @@ class _RecentEarningCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const CircleAvatar(
-              backgroundColor: AppTheme.successSoft,
-              child: Icon(Icons.payments_outlined, color: AppTheme.success),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return _EarningsEntrance(
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const CircleAvatar(
+                backgroundColor: AppTheme.successSoft,
+                child: Icon(Icons.payments_outlined, color: AppTheme.success),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.orderId, style: AppTheme.cardTitle),
+                    const SizedBox(height: 3),
+                    Text(item.store, style: AppTheme.bodyText),
+                    const SizedBox(height: 3),
+                    Text(item.dateTime, style: AppTheme.secondaryTextStyle),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${item.distanceKm.toStringAsFixed(1)} km',
+                      style: AppTheme.secondaryTextStyle,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(item.orderId, style: AppTheme.cardTitle),
-                  const SizedBox(height: 3),
-                  Text(item.store, style: AppTheme.bodyText),
-                  const SizedBox(height: 3),
-                  Text(item.dateTime, style: AppTheme.secondaryTextStyle),
-                  const SizedBox(height: 3),
+                  StatusBadge(
+                    label: 'Delivered',
+                    color: AppTheme.success,
+                    backgroundColor: AppTheme.successSoft,
+                  ),
+                  const SizedBox(height: 8),
                   Text(
-                    '${item.distanceKm.toStringAsFixed(1)} km',
-                    style: AppTheme.secondaryTextStyle,
+                    _currency(item.earnings),
+                    style: AppTheme.cardTitle.copyWith(color: AppTheme.success),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                StatusBadge(
-                  label: 'Delivered',
-                  color: AppTheme.success,
-                  backgroundColor: AppTheme.successSoft,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _currency(item.earnings),
-                  style: AppTheme.cardTitle.copyWith(color: AppTheme.success),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

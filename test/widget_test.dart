@@ -27,36 +27,45 @@ import 'package:myshopzy_rider/settings/settings_page.dart';
 void main() {
   testWidgets('home dashboard renders the local rider summary', (tester) async {
     await tester.pumpWidget(const RiderApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('Good morning,'), findsOneWidget);
     expect(find.text('MyShopzy'), findsNothing);
     expect(find.text('Ravi Kumar'), findsOneWidget);
-    expect(find.text("You're online"), findsOneWidget);
-    expect(
-      find.text("You're currently delivering; new offers are paused."),
-      findsOneWidget,
-    );
+    expect(find.text("You're offline"), findsOneWidget);
     expect(find.text("Today's summary"), findsOneWidget);
+    await _scrollHomeTo(tester, find.text("Today's summary"));
     expect(find.text('5'), findsOneWidget);
     expect(find.text('₹650'), findsOneWidget);
     expect(find.text('18.6 km'), findsOneWidget);
     expect(find.text('4h 25m'), findsOneWidget);
   });
 
-  testWidgets('online status can be toggled', (tester) async {
+  testWidgets('going online requires completing the safety checklist', (
+    tester,
+  ) async {
     await tester.pumpWidget(const RiderApp());
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
+    expect(find.text('Quick safety check'), findsOneWidget);
     expect(find.text("You're offline"), findsOneWidget);
+    for (var index = 0; index < 3; index++) {
+      await tester.tap(find.byType(Checkbox).at(index));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Start Safe Delivery').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text("You're online"), findsOneWidget);
     expect(
-      find.text("You're not available for new delivery offers."),
+      find.text("You're currently delivering; new offers are paused."),
       findsOneWidget,
     );
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    expect(find.text("You're online"), findsOneWidget);
+    expect(find.text("You're offline"), findsOneWidget);
   });
 
   testWidgets('home shows disconnected status while duty remains enabled', (
@@ -116,6 +125,7 @@ void main() {
       activeDelivery: null,
     );
     expect(offerStore.rejectOffer(), isTrue);
+    availabilityStore.setAvailable(false);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -130,13 +140,17 @@ void main() {
       ),
     );
 
+    expect(find.text("You're offline"), findsOneWidget);
+    expect(availabilityStore.isOnline, isFalse);
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    expect(find.text('Go online to receive new orders.'), findsOneWidget);
-    await _scrollHomeToTop(tester);
-    await tester.tap(find.byType(Switch));
+    for (var index = 0; index < 3; index++) {
+      await tester.tap(find.byType(Checkbox).at(index));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Start Safe Delivery').last);
     await tester.pumpAndSettle();
-    expect(find.text('Waiting for new orders'), findsOneWidget);
+    expect(availabilityStore.isOnline, isTrue);
     await tester.pumpWidget(const SizedBox());
     offerStore.dispose();
     availabilityStore.dispose();
@@ -193,6 +207,12 @@ void main() {
     await tester.tap(find.text('Mark Delivered'));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Home').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    await _completeSafetyChecklist(tester);
+
     await tester.tap(find.text('Orders').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Check for demo offer'));
@@ -211,8 +231,6 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const RiderApp());
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
 
     expect(find.text("You're offline"), findsOneWidget);
     await _scrollHomeTo(tester, find.text('#MS-2048'));
@@ -228,6 +246,7 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
+    await _completeSafetyChecklist(tester);
 
     await tester.tap(find.text('Orders').last);
     await tester.pumpAndSettle();
@@ -248,17 +267,21 @@ void main() {
 
     await tester.tap(find.text('Home').last);
     await tester.pumpAndSettle();
-    expect(find.text("You're offline"), findsOneWidget);
+    expect(find.text("You're online"), findsOneWidget);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
+    expect(find.text("You're offline"), findsOneWidget);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    await _completeSafetyChecklist(tester);
     await tester.tap(find.text('Orders').last);
     await tester.pumpAndSettle();
     expect(find.text("You're currently delivering"), findsOneWidget);
   });
 
   testWidgets(
-    'gig sessions are available any time and prevent duplicate booking',
+    'gig sessions remain available until their end time and prevent duplicates',
     (tester) async {
       final availabilityStore = AvailabilityStore();
       final repository = DemoGigRepository();
@@ -336,7 +359,9 @@ void main() {
     },
   );
 
-  testWidgets('ended gig session remains bookable', (tester) async {
+  testWidgets('past sessions expire while later sessions remain bookable', (
+    tester,
+  ) async {
     final availabilityStore = AvailabilityStore();
     await tester.pumpWidget(
       MaterialApp(
@@ -348,23 +373,25 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Expired'), findsWidgets);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
-      isNotNull,
+      isNull,
     );
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('gig-book-1')))
-          .onPressed,
-      isNotNull,
+    await tester.drag(
+      find.byKey(const ValueKey('available-sessions')),
+      const Offset(0, -500),
     );
+    await tester.pumpAndSettle();
+    final lateMorningButton = find.byKey(const ValueKey('gig-book-1'));
+    expect(tester.widget<FilledButton>(lateMorningButton).onPressed, isNotNull);
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
   });
 
-  testWidgets('session remains bookable at its exact end time', (tester) async {
+  testWidgets('session expires at its exact end time', (tester) async {
     final availabilityStore = AvailabilityStore();
     await tester.pumpWidget(
       MaterialApp(
@@ -376,11 +403,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Expired'), findsWidgets);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('gig-book-0')))
           .onPressed,
-      isNotNull,
+      isNull,
     );
     await tester.pumpWidget(const SizedBox());
     availabilityStore.dispose();
@@ -406,7 +434,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Open anytime'), findsWidgets);
+    expect(find.text('In progress'), findsOneWidget);
     expect(find.text('0 / 4 slots'), findsNothing);
     expect(
       tester
@@ -748,6 +776,7 @@ void main() {
     var maxActivePlayers = 0;
     var vibrationCount = 0;
     final alert = NewOrderAlert(
+      alertDuration: const Duration(seconds: 45),
       vibrate: () async {
         vibrationCount++;
       },
@@ -780,8 +809,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
     expect(stopCount, 1);
     expect(playCount, 4);
+    final vibrationsAtTimeout = vibrationCount;
     await tester.pump(const Duration(seconds: 5));
     expect(playCount, 4);
+    expect(vibrationCount, vibrationsAtTimeout);
     expect(maxActivePlayers, 1);
     await alert.dispose();
   });
@@ -932,8 +963,6 @@ void main() {
 
   testWidgets('Home state stays intact across bottom tabs', (tester) async {
     await tester.pumpWidget(const RiderApp());
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
 
     for (final tab in ['Orders', 'Earnings', 'Profile', 'Home']) {
       await tester.tap(find.text(tab).last);
@@ -948,6 +977,7 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
+    await _completeSafetyChecklist(tester);
     await tester.tap(find.text('Profile').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home').last);
@@ -1778,6 +1808,7 @@ void main() {
 
     expect(find.text('Ravi Kumar'), findsOneWidget);
     expect(find.text('Rider ID: RDR-1001'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-photo-upload')), findsOneWidget);
     expect(find.text('+91 98765 43210'), findsWidgets);
     expect(find.text('ACTIVE'), findsOneWidget);
     expect(find.text('VERIFIED'), findsOneWidget);
@@ -2444,22 +2475,6 @@ Future<void> _scrollHomeTo(WidgetTester tester, Finder target) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _scrollHomeToTop(WidgetTester tester) async {
-  for (
-    var attempt = 0;
-    attempt < 10 && find.byType(Switch).evaluate().isEmpty;
-    attempt++
-  ) {
-    await tester.drag(
-      find.byType(CustomScrollView).first,
-      const Offset(0, 400),
-    );
-    await tester.pumpAndSettle();
-  }
-
-  expect(find.byType(Switch), findsOneWidget);
-}
-
 class _OfferHarness {
   const _OfferHarness({
     required this.availabilityStore,
@@ -2551,6 +2566,15 @@ Future<AvailabilityStore> _pumpProfilePage(WidgetTester tester) async {
     ),
   );
   return availabilityStore;
+}
+
+Future<void> _completeSafetyChecklist(WidgetTester tester) async {
+  for (var index = 0; index < 3; index++) {
+    await tester.tap(find.byType(Checkbox).at(index));
+    await tester.pump();
+  }
+  await tester.tap(find.text('Start Safe Delivery').last);
+  await tester.pumpAndSettle();
 }
 
 class _FailingGigRepository implements GigRepository {

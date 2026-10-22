@@ -9,6 +9,8 @@ import 'new_order_vibration_stub.dart'
     as browser_vibration;
 
 class NewOrderAlert {
+  static const _maximumAlertDuration = Duration(seconds: 30);
+
   NewOrderAlert({
     this.alertDuration = const Duration(seconds: 30),
     this.requireUserGestureForSound = kIsWeb,
@@ -63,7 +65,10 @@ class NewOrderAlert {
     _vibrationTimer = null;
     _orderId = orderId;
     _isPlaying = false;
-    _windowTimer = Timer(alertDuration, () {
+    final windowDuration = alertDuration > _maximumAlertDuration
+        ? _maximumAlertDuration
+        : alertDuration;
+    _windowTimer = Timer(windowDuration, () {
       unawaited(stop());
     });
     if (_vibrationEnabled) {

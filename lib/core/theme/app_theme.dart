@@ -1,25 +1,29 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const brand = Color(0xFF176B45);
-  static const darkGreen = Color(0xFF103D2B);
-  static const brandYellow = Color(0xFFF2C94C);
-  static const appBackground = Color(0xFFF7FAF7);
+  static const brand = Color(0xFF247653);
+  static const darkGreen = Color(0xFF183B32);
+  static const accentGreen = Color(0xFF9BBB82);
+  static const brandYellow = Color(0xFFE8B65A);
+  static const accentCoral = Color(0xFFC98A4A);
+  static const accentBlue = Color(0xFF5F8D75);
+  static const appBackground = Color(0xFFF4F7F4);
   static const background = appBackground;
   static const surface = Color(0xFFFFFFFF);
-  static const fieldSurface = Color(0xFFFFFEF8);
-  static const lightGreenSurface = Color(0xFFEAF4EE);
-  static const onlineBox = Color(0xFFF1F7F3);
-  static const summaryCard = Color(0xFFEAF4EE);
+  static const fieldSurface = Color(0xFFFAFCFA);
+  static const lightGreenSurface = Color(0xFFE8F1E9);
+  static const lightBlueSurface = Color(0xFFEEF3F0);
+  static const onlineBox = Color(0xFFEAF3EB);
+  static const summaryCard = Color(0xFFE8F1E9);
   static const currentDeliveryCard = Color(0xFFFFFFFF);
-  static const performanceTile = Color(0xFFEAF4EE);
-  static const primaryText = Color(0xFF18372A);
-  static const secondaryText = Color(0xFF66766D);
+  static const performanceTile = Color(0xFFEEF3F0);
+  static const primaryText = Color(0xFF263A32);
+  static const secondaryText = Color(0xFF68766F);
   static const success = brand;
   static const warning = Color(0xFF9A6A17);
   static const error = Color(0xFFB42318);
   static const errorSoft = Color(0xFFFFE8E6);
-  static const divider = Color(0xFFDDE7E0);
+  static const divider = Color(0xFFDCE5E7);
   static const brandSoft = lightGreenSurface;
   static const successSoft = lightGreenSurface;
   static const mapSurface = lightGreenSurface;
@@ -65,6 +69,8 @@ abstract final class AppTheme {
       onPrimary: surface,
       secondary: brandYellow,
       onSecondary: darkGreen,
+      tertiary: accentCoral,
+      onTertiary: surface,
       error: error,
       onError: surface,
       surface: surface,
@@ -92,7 +98,8 @@ abstract final class AppTheme {
         foregroundColor: surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        shape: Border(bottom: BorderSide(color: Color(0x66F2C94C), width: 1.5)),
+        shadowColor: Color(0x33123D35),
+        shape: Border(bottom: BorderSide(color: accentCoral, width: 2)),
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: surface,
@@ -106,12 +113,12 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 3,
-        shadowColor: const Color(0x1F103D2B),
+        elevation: 5,
+        shadowColor: const Color(0x24123D35),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),
-          side: const BorderSide(color: Color(0xFFDCEBE0)),
+          side: const BorderSide(color: Color(0xFFDCE9E4)),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -119,10 +126,10 @@ abstract final class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         elevation: 14,
-        shadowColor: const Color(0x33103D2B),
+        shadowColor: const Color(0x33123D35),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(26),
-          side: const BorderSide(color: Color(0xFFDCEBE0)),
+          side: const BorderSide(color: Color(0xFFDCE9E4)),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -138,6 +145,37 @@ abstract final class AppTheme {
         color: divider,
         thickness: 1,
         space: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: lightBlueSurface,
+        selectedColor: lightGreenSurface,
+        secondarySelectedColor: brandYellow.withValues(alpha: 0.3),
+        disabledColor: appBackground,
+        surfaceTintColor: Colors.transparent,
+        side: const BorderSide(color: divider),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        labelStyle: const TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: darkGreen,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: brand,
+        linearTrackColor: lightGreenSurface,
+        circularTrackColor: lightGreenSurface,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: accentCoral,
+        foregroundColor: surface,
+        elevation: 5,
+        focusElevation: 7,
+        hoverElevation: 8,
+        highlightElevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -171,7 +209,7 @@ abstract final class AppTheme {
             ).copyWith(
               animationDuration: const Duration(milliseconds: 180),
               elevation: _buttonElevation,
-              shadowColor: const WidgetStatePropertyAll(Color(0x33123D30)),
+              shadowColor: const WidgetStatePropertyAll(Color(0x33123D35)),
               overlayColor: _buttonOverlay,
               backgroundBuilder: _buttonDepthEffect,
             ),
@@ -193,7 +231,7 @@ abstract final class AppTheme {
             ).copyWith(
               animationDuration: const Duration(milliseconds: 180),
               elevation: _buttonElevation,
-              shadowColor: const WidgetStatePropertyAll(Color(0x33123D30)),
+              shadowColor: const WidgetStatePropertyAll(Color(0x33123D35)),
               overlayColor: _buttonOverlay,
               backgroundBuilder: _buttonDepthEffect,
             ),
@@ -213,7 +251,7 @@ abstract final class AppTheme {
             ).copyWith(
               animationDuration: const Duration(milliseconds: 180),
               elevation: _buttonElevation,
-              shadowColor: const WidgetStatePropertyAll(Color(0x33123D30)),
+              shadowColor: const WidgetStatePropertyAll(Color(0x33123D35)),
               overlayColor: _buttonOverlay,
               backgroundBuilder: _buttonDepthEffect,
             ),
@@ -222,7 +260,7 @@ abstract final class AppTheme {
         style: ButtonStyle(
           animationDuration: const Duration(milliseconds: 180),
           elevation: _buttonElevation,
-          shadowColor: const WidgetStatePropertyAll(Color(0x33123D30)),
+          shadowColor: const WidgetStatePropertyAll(Color(0x33123D35)),
           overlayColor: _buttonOverlay,
           backgroundBuilder: _buttonDepthEffect,
           shape: WidgetStatePropertyAll(
@@ -360,18 +398,18 @@ abstract final class AppTheme {
             ? const []
             : [
                 BoxShadow(
-                  color: brand.withValues(
+                  color: (hovered || focused ? accentBlue : brand).withValues(
                     alpha: pressed
-                        ? 0.12
+                        ? 0.14
                         : hovered || focused
-                        ? 0.2
-                        : 0.14,
+                        ? 0.24
+                        : 0.16,
                   ),
                   blurRadius: pressed
                       ? 3
                       : hovered || focused
-                      ? 17
-                      : 9,
+                      ? 19
+                      : 10,
                   offset: Offset(
                     0,
                     pressed

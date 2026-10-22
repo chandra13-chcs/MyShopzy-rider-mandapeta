@@ -46,9 +46,9 @@ class _HomePageState extends State<HomePage> {
   bool _isCompactLayout(BuildContext context) =>
       MediaQuery.sizeOf(context).width < 340;
 
-  Future<void> _showSafetyChecklist() {
+  Future<void> _showSafetyChecklist() async {
     final checkedItems = [false, false, false];
-    return showModalBottomSheet<void>(
+    final isReady = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -71,21 +71,21 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 18),
                   _SafetyCheckItem(
                     icon: Icons.sports_motorsports_rounded,
-                    title: 'Wear and fasten your helmet',
+                    title: 'I am wearing and fastening my helmet',
                     checked: checkedItems[0],
                     onChanged: (checked) =>
                         setSheetState(() => checkedItems[0] = checked ?? false),
                   ),
                   _SafetyCheckItem(
                     icon: Icons.tire_repair_rounded,
-                    title: 'Check your brakes and tires',
+                    title: "I checked my bike's condition (brakes and tires)",
                     checked: checkedItems[1],
                     onChanged: (checked) =>
                         setSheetState(() => checkedItems[1] = checked ?? false),
                   ),
                   _SafetyCheckItem(
                     icon: Icons.phone_android_rounded,
-                    title: 'Secure your phone before moving',
+                    title: "I have my phone and it's secured",
                     checked: checkedItems[2],
                     onChanged: (checked) =>
                         setSheetState(() => checkedItems[2] = checked ?? false),
@@ -95,9 +95,9 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: isReady
-                          ? () => Navigator.of(context).pop()
+                          ? () => Navigator.of(context).pop(true)
                           : null,
-                      child: const Text('Ready to ride safely'),
+                      child: const Text('Start Safe Delivery'),
                     ),
                   ),
                 ],
@@ -107,6 +107,17 @@ class _HomePageState extends State<HomePage> {
         },
       ),
     );
+    if (isReady == true && mounted) {
+      widget.availabilityStore.setAvailable(true);
+    }
+  }
+
+  void _handleAvailabilityChanged(bool isAvailable) {
+    if (isAvailable) {
+      unawaited(_showSafetyChecklist());
+    } else {
+      widget.availabilityStore.setAvailable(false);
+    }
   }
 
   @override
@@ -331,7 +342,7 @@ class _HomePageState extends State<HomePage> {
                       child: Switch.adaptive(
                         value: isAvailable,
                         activeTrackColor: AppTheme.success,
-                        onChanged: widget.availabilityStore.setAvailable,
+                        onChanged: _handleAvailabilityChanged,
                       ),
                     ),
                   ],
@@ -342,7 +353,7 @@ class _HomePageState extends State<HomePage> {
                     Switch.adaptive(
                       value: isAvailable,
                       activeTrackColor: AppTheme.success,
-                      onChanged: widget.availabilityStore.setAvailable,
+                      onChanged: _handleAvailabilityChanged,
                     ),
                   ],
                 ),
@@ -429,7 +440,7 @@ class _HomePageState extends State<HomePage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                child: const Text('Start Delivering Safely'),
+                child: const Text('Start Safe Delivery'),
               ),
             ),
           ],
